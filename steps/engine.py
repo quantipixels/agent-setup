@@ -84,6 +84,47 @@ def user_name():
     return name or '<your name>'
 
 
+_YAML = {}
+
+
+def load_yaml(name):
+    """Read base/<name> through yq (JSON output). Falls back to mise when yq is not on PATH."""
+    if name not in _YAML:
+        command = ['yq'] if shutil.which('yq') else ['mise', 'exec', 'yq@latest', '--', 'yq']
+        proc = subprocess.run([*command, '-o=json', '.', str(ROOT / 'base' / name)], text=True, capture_output=True)
+        if proc.returncode: raise ValueError('Cannot read base/' + name + ': ' + proc.stderr.strip())
+        _YAML[name] = json.loads(proc.stdout)
+    return _YAML[name]
+
+
+def for_host(rows, host):
+    return [row for row in rows if host in row.get('hosts', ['claude', 'codex'])]
+
+
+def plugin_rows(host):
+    return [row for row in load_yaml('plugins.yaml')['plugins'] if host in row]
+
+
+def hooks_for(host):
+    """Render base/hooks.yaml in the host's native format: event -> [{matcher?, hooks: [..]}]."""
+    events = {}
+    for row in for_host(load_yaml('hooks.yaml')['hooks'], host):
+        hook = {'type': 'command', 'command': template(row['command'])}
+        if 'timeout' in row: hook['timeout'] = row['timeout']
+        if 'status' in row: hook['statusMessage'] = row['status']
+        group = {'matcher': row['matcher']} if 'matcher' in row else {}
+        events.setdefault(row['event'], []).append({**group, 'hooks': [hook]})
+    return events
+
+
+def claude_settings(text):
+    data = json.loads(text)
+    data['hooks'] = hooks_for('claude')
+    data['enabledPlugins'] = {row['claude']: True for row in plugin_rows('claude')}
+    data['extraKnownMarketplaces'] = {m['name']: {'source': {'source': 'github', 'repo': m['source']}} for m in for_host(load_yaml('plugins.yaml')['marketplaces'], 'claude')}
+    return serial(data, '.json')
+
+
 def desired():
     result = {}
     for client, instruction in [('claude', 'CLAUDE.md'), ('codex', 'AGENTS.md')]:
@@ -92,19 +133,19 @@ def desired():
         for source in sorted(directory.rglob('*')):
             if not source.is_file(): continue
             rel = source.relative_to(directory)
-            if source.name in ('plugins.txt', 'marketplaces.txt', 'agents.pins.toml'): continue
             rel = Path(str(rel).removesuffix('.tmpl'))
             text = template(source.read_text())
+            if client == 'claude' and rel == Path('settings.json'): text = claude_settings(text)
             target = HOME / ('.' + client) / rel
             result[target] = text
-    pins = ROOT / 'base/codex/agents.pins.toml'
+    result[HOME / '.codex/hooks.json'] = serial({'hooks': hooks_for('codex')}, '.json')
+    pins = load_yaml('agents.yaml')['codex']
     caches = sorted((HOME / '.codex/plugins/cache/alarina/alarina').glob('*/codex-agents'), key=lambda p: [int(x) if x.isdigit() else x for x in re.split(r'[.]', p.parent.name)])
-    if pins.exists() and caches:
-        entries = tomllib.loads(pins.read_text())
+    if caches:
         for shipped in sorted(caches[-1].glob('*.toml')):
             lines = [line for line in shipped.read_text().splitlines(keepends=True) if not re.match(r'(model|model_reasoning_effort) = ', line)]
-            pair = entries.get(shipped.stem, {})
-            pinned = ''.join(f'{key} = "{value}"\n' for key, value in pair.items())
+            pair = pins.get(shipped.stem)
+            pinned = f'model = "{pair["model"]}"\nmodel_reasoning_effort = "{pair["effort"]}"\n' if pair else ''
             result[HOME / '.codex/agents' / shipped.name] = ''.join(lines[:2]) + pinned + ''.join(lines[2:])
     return result
 
@@ -166,12 +207,6 @@ def run(command):
     subprocess.run(command, check=True, env=install_env())
 
 
-def manifest(name):
-    path = ROOT / 'base' / name
-    if not path.exists(): return []
-    return [line.strip() for line in path.read_text().splitlines() if line.strip() and not line.lstrip().startswith('#')]
-
-
 def tool_names():
     return ['git', 'python3', 'mise', 'node', 'npm', 'npx', 'claude', 'codex', 'gh', 'rg', 'fd', 'jq', 'ast-grep', 'lefthook', 'gitleaks', 'shellcheck', 'shfmt', 'vp', 'oxlint', 'oxfmt', 'ruff']
 
@@ -187,33 +222,40 @@ def plugins(args):
         print('Offline structural profile: skipped plugin installation and authentication.'); return
     known_path = HOME / '.claude/plugins/known_marketplaces.json'
     known = json.loads(known_path.read_text()) if known_path.is_file() else {}
-    for row in manifest('claude/marketplaces.txt'):
-        name, source = row.split('\t', 1)
-        if name not in known:
-            run(['claude', 'plugin', 'marketplace', 'add', source])
-        run(['claude', 'plugin', 'marketplace', 'update', name])
-    for name in manifest('claude/plugins.txt'):
-        run(['claude', 'plugin', 'install', name, '--scope', 'user'])
-        run(['claude', 'plugin', 'update', name, '--scope', 'user'])
+    for market in for_host(load_yaml('plugins.yaml')['marketplaces'], 'claude'):
+        if market['name'] not in known:
+            run(['claude', 'plugin', 'marketplace', 'add', market['source']])
+        run(['claude', 'plugin', 'marketplace', 'update', market['name']])
+    for row in plugin_rows('claude'):
+        run(['claude', 'plugin', 'install', row['claude'], '--scope', 'user'])
+        run(['claude', 'plugin', 'update', row['claude'], '--scope', 'user'])
     (HOME / '.codex').mkdir(parents=True, exist_ok=True)
     run(['codex', 'plugin', 'marketplace', 'upgrade'])
-    for name in manifest('codex/plugins.txt'):
-        if name.endswith('@openai-curated') and args.no_login:
-            print('Needs codex login first: ' + name); continue
-        run(['codex', 'plugin', 'add', name])
+    for row in plugin_rows('codex'):
+        if row.get('builtin'): continue
+        if row.get('login') and args.no_login:
+            print('Needs codex login first: ' + row['codex']); continue
+        run(['codex', 'plugin', 'add', row['codex']])
+
+
+def skill_rows(host=None):
+    """Yield (source, skill) for skills.yaml rows that target host (any host when None)."""
+    for row in load_yaml('skills.yaml')['skills']:
+        if host is None or host in row.get('hosts', ['claude', 'codex']):
+            for name in row['skills']: yield row['source'], name
 
 
 def skills(args):
     if args.offline or args.dry_run:
         print('Offline structural profile: skipped skill installation.'); return
-    for row in manifest('skills.txt'):
-        source, name = row.split('\t', 1)
-        run(['npx', '--yes', 'skills@latest', 'add', source, '--skill', name, '--global', '--agent', 'claude-code', '--agent', 'codex', '--yes'])
+    for row in load_yaml('skills.yaml')['skills']:
+        agents = [x for host in row.get('hosts', ['claude', 'codex']) for x in ('--agent', {'claude': 'claude-code'}.get(host, host))]
+        for name in row['skills']:
+            run(['npx', '--yes', 'skills@latest', 'add', row['source'], '--skill', name, '--global', *agents, '--yes'])
 
 
 def toolkit(args):
-    rows = manifest('toolkit.tsv')
-    print('\n'.join(rows))
+    print('\n'.join('\t'.join([language, row['tool'], row['why']]) for language, rows in load_yaml('toolkit.yaml').items() for row in rows))
     if args.offline or args.dry_run:
         print('Toolkit shown only; install skipped.'); return
     wanted = mise_tools()
@@ -295,12 +337,11 @@ def doctor(args):
         except (ValueError, OSError) as exc: errors.append(str(exc))
     if mode == 'full':
         errors.extend('Missing tool: ' + x for x in tool_names() if not shutil.which(x))
-        for row in manifest('skills.txt'):
-            name = row.split('\t', 1)[1]
+        for _, name in skill_rows():
             if not (HOME / '.agents/skills' / name / 'SKILL.md').is_file(): errors.append('Missing skill: ' + name)
         claude_path = HOME / '.claude/plugins/installed_plugins.json'
         claude_installed = json.loads(claude_path.read_text()).get('plugins', {}) if claude_path.is_file() else {}
-        for plugin in manifest('claude/plugins.txt'):
+        for plugin in (row['claude'] for row in plugin_rows('claude')):
             records = claude_installed.get(plugin, [])
             if not any(record.get('scope') == 'user' and Path(record.get('installPath', '')).is_dir() for record in records):
                 errors.append('Missing Claude user plugin: ' + plugin)
@@ -309,15 +350,16 @@ def doctor(args):
             errors.append('Cannot list Codex plugins: ' + proc.stderr.strip())
         else:
             codex_installed = json.loads(proc.stdout).get('installed', [])
-            for plugin in manifest('codex/plugins.txt'):
+            for row in plugin_rows('codex'):
+                plugin = row['codex']
                 # Confirm this selector in the CLI's installed inventory, not its cache.
                 if not any(plugin in json.dumps(record) for record in codex_installed):
-                    if plugin.endswith('@openai-curated'): print('Pending codex login: ' + plugin)
+                    if row.get('login'): print('Pending codex login: ' + plugin)
                     else: errors.append('Missing Codex plugin: ' + plugin)
     if errors: raise ValueError('Doctor failed:\n' + '\n'.join(errors))
     print('Doctor passed: ' + mode + (' (managed files only; tools, plugins, skills and login were skipped).' if mode == 'offline-structural' else ' (managed files, tools, plugins and skills checked).'))
     if mode != 'full': return
-    lock = {'profile': mode, 'checked_at': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'files': {str(p.relative_to(HOME)): hashlib.sha256(p.read_bytes()).hexdigest() for p in desired()}, 'versions': {}, 'plugins': {'claude': claude_installed, 'codex': codex_installed}, 'skills': {name: {'source': source, 'revision': subprocess.run(['git', '-C', str(HOME / '.agents/skills' / name), 'rev-parse', 'HEAD'], text=True, capture_output=True).stdout.strip()} for source, name in (row.split('\t', 1) for row in manifest('skills.txt'))}}
+    lock = {'profile': mode, 'checked_at': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'files': {str(p.relative_to(HOME)): hashlib.sha256(p.read_bytes()).hexdigest() for p in desired()}, 'versions': {}, 'plugins': {'claude': claude_installed, 'codex': codex_installed}, 'skills': {name: {'source': source, 'revision': subprocess.run(['git', '-C', str(HOME / '.agents/skills' / name), 'rev-parse', 'HEAD'], text=True, capture_output=True).stdout.strip()} for source, name in skill_rows()}}
     if mode == 'full':
         for name in tool_names():
             proc = subprocess.run([name, '--version'], text=True, capture_output=True)

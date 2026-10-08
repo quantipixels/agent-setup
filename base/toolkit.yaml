@@ -1,0 +1,44 @@
+# language -> tools, each with why.
+always:
+  - tool: rg
+    why: Find text quickly
+  - tool: fd
+    why: Find files quickly
+  - tool: jq
+    why: Read hook JSON
+  - tool: ast-grep
+    why: Find code by syntax
+  - tool: lefthook
+    why: Run Git checks
+  - tool: gitleaks
+    why: Detect secrets
+  - tool: mise
+    why: Install latest tools and run tasks
+TS:
+  - tool: typescript-lsp
+    why: Claude TypeScript code intelligence
+  - tool: vite-plus (vp), oxlint, oxfmt
+    why: Vite+ toolchain: vp check, lint (Oxlint), format (Oxfmt)
+Python:
+  - tool: pyright-lsp
+    why: Claude Python code intelligence
+  - tool: ruff
+    why: Python format and lint
+Kotlin/Java:
+  - tool: kotlin-lsp
+    why: Claude Kotlin code intelligence
+  - tool: jdtls-lsp
+    why: Claude Java code intelligence
+Rust:
+  - tool: rust-analyzer-lsp
+    why: Claude Rust code intelligence
+Swift:
+  - tool: swift-lsp
+    why: Claude Swift code intelligence
+  - tool: swiftui-pro
+    why: SwiftUI review skill
+Shell:
+  - tool: shellcheck
+    why: Check shell scripts
+  - tool: shfmt
+    why: Format shell scripts

@@ -11,7 +11,7 @@ Goal: this machine runs the base setup for Claude Code and Codex, with the user'
 3. **Do.** After the user agrees, install only what is missing, apply the files (a backup goes to `~/.agent-setup/backups/<date>/` first), and refresh plugins and skills. Use the `steps/` scripts when they fit. When the machine needs another path, take it and say why.
 4. **Verify.** Run `mise run doctor`. Fix what fails, or report the exact error.
 
-Ask the user for the name the agents should use (`--name`, default: `git config user.name`). Pause for: changes to the user's instruction or settings files, removals, logins (`! gh auth login`, `claude auth login`, `codex login`), `sudo`, and choices between the user's version and the base. Codex `@openai-curated` plugins install only after `codex login`.
+Ask the user for the name the agents should use (`--name`, default: `git config user.name`). Pause for: changes to the user's instruction or settings files, removals, logins (`! gh auth login`, `claude auth login`, `codex login`), `sudo`, and choices between the user's version and the base. Codex plugins marked `login: true` in `base/plugins.yaml` install only after `codex login`.
 
 Done when: doctor passes, and the report lists what changed, what was skipped, the available updates, and what the user still has to do.
 
@@ -33,7 +33,7 @@ Run `mise run toolkit` for the install step. LSP names are Claude plugins; langu
 
 ## Files and steps
 
-`base/shared/instructions.md` supplies both instruction templates. Personal voice and the Alárinà usefulness log are opt-in in `examples/personal.md`. `base/skills.txt` contains source and skill name only, verified against installed folders. `base/codex/agents.pins.toml` holds role and model choices; these are not tool release pins.
+`base/shared/instructions.md` supplies both instruction templates. Personal voice and the Alárinà usefulness log are opt-in in `examples/personal.md`. Setup lists live in YAML that names each host: `base/plugins.yaml` (plugins and marketplaces), `base/skills.yaml` (source and skill names, verified against installed folders), `base/hooks.yaml` (rendered into each host's native hook format; scripts stay in `base/<host>/hooks/`), `base/toolkit.yaml`, and `base/agents.yaml` (Codex role and model choices; these are not tool release pins). The engine reads them through `yq`; it generates the hooks, `enabledPlugins` and `extraKnownMarketplaces` settings keys and `~/.codex/hooks.json`.
 
 `steps/check-tools`, `render`, `diff`, `apply`, `plugins`, `skills`, `codex-agents`, `toolkit`, `doctor`, and `capture` can run separately. `steps/setup` runs the sequence. Render prints to stdout by default. Use each step's `--help` for options.
 

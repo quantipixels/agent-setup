@@ -1,0 +1,66 @@
+# One row per job. `claude` and `codex` name the plugin on each host as plugin@marketplace.
+# login: Codex curated plugin; installs only after `codex login`.
+# builtin: ships with the host; doctor checks it, setup does not install it.
+marketplaces:
+  - name: claude-plugins-official
+    source: anthropics/claude-plugins-official
+    hosts: [claude]
+  - name: openai-codex
+    source: openai/codex-plugin-cc
+    hosts: [claude]
+  - name: ast-grep-marketplace
+    source: ast-grep/agent-skill
+    hosts: [claude]
+  - name: alarina
+    source: quantipixels/alarina
+    hosts: [claude, codex]
+
+plugins:
+  - job: Frontend design guidance
+    claude: frontend-design@claude-plugins-official
+  - job: Simplify code
+    claude: code-simplifier@claude-plugins-official
+  - job: Build plugins
+    claude: plugin-dev@claude-plugins-official
+  - job: TypeScript code intelligence
+    claude: typescript-lsp@claude-plugins-official
+  - job: Python code intelligence
+    claude: pyright-lsp@claude-plugins-official
+  - job: Rust code intelligence
+    claude: rust-analyzer-lsp@claude-plugins-official
+  - job: Java code intelligence
+    claude: jdtls-lsp@claude-plugins-official
+  - job: Kotlin code intelligence
+    claude: kotlin-lsp@claude-plugins-official
+  - job: Swift code intelligence
+    claude: swift-lsp@claude-plugins-official
+  - job: Hook rules
+    claude: hookify@claude-plugins-official
+  - job: Codex from Claude Code
+    claude: codex@openai-codex
+  - job: Code review
+    claude: code-review@claude-plugins-official
+    codex: code-review@openai-bundled
+    builtin: true
+  - job: Create skills
+    claude: skill-creator@claude-plugins-official
+  - job: Browser automation
+    claude: playwright@claude-plugins-official
+  - job: Structural code search
+    claude: ast-grep@ast-grep-marketplace
+  - job: Alárinà engineering workflow
+    claude: alarina@alarina
+    codex: alarina@alarina
+  - job: Modern web guidance
+    claude: modern-web-guidance@claude-plugins-official
+    codex: modern-web-guidance@openai-curated-remote
+    login: true
+  - job: Build macOS apps
+    codex: build-macos-apps@openai-curated-remote
+    login: true
+  - job: Build web apps
+    codex: build-web-apps@openai-curated-remote
+    login: true
+  - job: Test Android apps
+    codex: test-android-apps@openai-curated-remote
+    login: true

@@ -1,0 +1,27 @@
+# One row per hook. Scripts live in base/<host>/hooks/. Omit matcher to match every call.
+hooks:
+  - event: PreToolUse
+    matcher: Bash
+    command: node "${HOME}/.codex/hooks/shellcheck-validate.mjs"
+    hosts: [codex]
+  - event: PostToolUse
+    matcher: Edit|Write|MultiEdit
+    command: sh "${HOME}/.claude/hooks/ruff-format.sh"
+    timeout: 30
+    hosts: [claude]
+  - event: PreToolUse
+    matcher: Bash
+    command: sh "${HOME}/.claude/hooks/strip-claude-attribution.sh"
+    timeout: 10
+    hosts: [claude]
+  - event: PostToolUse
+    matcher: Edit|Write|apply_patch
+    command: '[ ! -f "${HOME}/.agents/skills/impeccable/scripts/hook.mjs" ] || node "${HOME}/.agents/skills/impeccable/scripts/hook.mjs"'
+    timeout: 5
+    status: Checking UI changes
+    hosts: [codex]
+  - event: Stop
+    command: '[ ! -f "${HOME}/.agents/skills/impeccable/scripts/hook.mjs" ] || node "${HOME}/.agents/skills/impeccable/scripts/hook.mjs"'
+    timeout: 30
+    status: Design deep pass
+    hosts: [codex]

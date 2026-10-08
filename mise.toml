@@ -24,6 +24,7 @@ oxlint = "latest"
 ruff = "latest"
 actionlint = "latest"
 zizmor = "latest"
+yq = "latest"
 
 [tasks.setup]
 run = "steps/setup"

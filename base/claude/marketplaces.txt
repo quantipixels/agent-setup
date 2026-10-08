@@ -1,5 +1,0 @@
-# name	GitHub repository
-claude-plugins-official	anthropics/claude-plugins-official
-openai-codex	openai/codex-plugin-cc
-ast-grep-marketplace	ast-grep/agent-skill
-alarina	quantipixels/alarina

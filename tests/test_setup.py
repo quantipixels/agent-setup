@@ -27,6 +27,16 @@ class SetupTests(unittest.TestCase):
         self.assertIn('+++', result.stdout)
         self.assertEqual(list(self.home.iterdir()), [])
 
+    def test_hooks_render_in_each_host_format(self):
+        out = self.run_step('render').stdout
+        claude = json.loads(out.split('--- ' + str(self.home / '.claude/settings.json') + '\n')[1].split('\n--- ')[0])
+        codex = json.loads(out.split('--- ' + str(self.home / '.codex/hooks.json') + '\n')[1].split('\n--- ')[0])
+        self.assertEqual(claude['hooks']['PreToolUse'][0]['hooks'][0]['timeout'], 10)
+        self.assertNotIn('statusMessage', json.dumps(claude['hooks']))
+        self.assertEqual(codex['hooks']['Stop'][0]['hooks'][0]['statusMessage'], 'Design deep pass')
+        self.assertNotIn('matcher', codex['hooks']['Stop'][0])
+        self.assertIn(str(self.home), codex['hooks']['PreToolUse'][0]['hooks'][0]['command'])
+
     def test_merge_backup_and_idempotency(self):
         target = self.home / '.claude/settings.json'
         target.parent.mkdir()
@@ -49,6 +59,7 @@ class SetupTests(unittest.TestCase):
         env_proc = mock.Mock(stdout='{}')
         with mock.patch.object(engine.shutil, 'which', lambda x: '/bin/' + x if x in present else None), \
              mock.patch.object(engine, 'tool_version', lambda x: '1.0'), \
+             mock.patch.object(engine, 'load_yaml', return_value={}), \
              mock.patch.object(engine, 'run') as run, \
              mock.patch.object(engine.subprocess, 'run', return_value=env_proc):
             engine.toolkit(argparse.Namespace(offline=False, dry_run=False))
