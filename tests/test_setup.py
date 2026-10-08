@@ -22,6 +22,13 @@ class SetupTests(unittest.TestCase):
     def run_step(self, name, *args):
         return subprocess.run([str(ROOT / 'steps' / name), *args], env=self.env, capture_output=True, text=True, check=True)
 
+    def test_hook_paths_expand_tilde(self):
+        spec = importlib.util.spec_from_file_location('engine', ROOT / 'steps/engine.py')
+        engine = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(engine)
+        found = list(engine.hook_paths({'command': 'bash ~/.claude/statusline-command.sh'}))
+        self.assertEqual(found, [engine.HOME / '.claude/statusline-command.sh'])
+
     def test_plan_has_no_writes(self):
         result = self.run_step('diff')
         self.assertIn('+++', result.stdout)

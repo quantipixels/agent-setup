@@ -305,8 +305,8 @@ def hook_paths(value):
     if isinstance(value, dict):
         for key, item in value.items():
             if key == 'command' and isinstance(item, str):
-                for match in re.findall(r'(?:\$HOME|\$\{HOME\}|/[^\s"\']+)[^\s"\']*\.sh', item):
-                    yield Path(match.replace('${HOME}', str(HOME)).replace('$HOME', str(HOME)))
+                for match in re.findall(r'(?:\$HOME|\$\{HOME\}|~|(?<![\w~$}])/[^\s"\']+)[^\s"\']*\.sh', item):
+                    yield Path(match.replace('${HOME}', str(HOME)).replace('$HOME', str(HOME)).replace('~/', str(HOME) + '/', 1))
             yield from hook_paths(item)
     elif isinstance(value, list):
         for item in value: yield from hook_paths(item)
