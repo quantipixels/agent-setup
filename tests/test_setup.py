@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 class SetupTests(unittest.TestCase):
     def setUp(self):
-        self.home = Path(tempfile.mkdtemp(dir=ROOT / '.work'))
+        self.home = Path(tempfile.mkdtemp())
         self.env = dict(os.environ, HOME=str(self.home))
 
     def tearDown(self):
