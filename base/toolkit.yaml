@@ -14,6 +14,22 @@ always:
     why: Detect secrets
   - tool: mise
     why: Install latest tools and run tasks
+  - tool: yq
+    why: Read the setup lists and YAML
+  - tool: gh
+    why: Work with pull requests, issues, and CI runs
+  - tool: semgrep
+    why: Find bugs and unsafe code by pattern
+  - tool: osv-scanner
+    why: Find known-vulnerable dependencies
+  - tool: just
+    why: Give every agent one set of scoped commands, such as just check
+  - tool: actionlint
+    why: Check GitHub Actions files before you push
+  - tool: hyperfine
+    why: Measure speed before and after a change
+  - tool: tokei
+    why: Size and language profile of an unfamiliar repo
   - tool: SIGIDI (app)
     why: Desktop workspace where Claude Code and Codex run; install from quantipixels/sigidi-release if missing
 TS:
@@ -32,6 +48,10 @@ Kotlin/Java:
 Rust:
   - tool: cargo clippy
     why: Lint and type check Rust (comes with rustup)
+  - tool: cargo-nextest
+    why: Run Rust tests fast; install with cargo install --locked cargo-nextest
+  - tool: cargo-deny
+    why: Check Rust dependency licenses and advisories; install with cargo install --locked cargo-deny
 Swift:
   - tool: swift build
     why: Compile and type check Swift (comes with Xcode)
