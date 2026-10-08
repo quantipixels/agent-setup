@@ -9,7 +9,8 @@ Goal: this machine runs the base setup for Claude Code and Codex, with the user'
 1. **Detect.** Find the tools, plugins, skills, hooks, and instruction files that exist now. `mise run plan` shows the file diff against the base.
 2. **Recommend.** List what is missing, what differs from the base, and what is outdated, grouped as add / update / keep. Never remove what the user owns.
 3. **Do.** After the user agrees, install only what is missing, apply the files (a backup goes to `~/.agent-setup/backups/<date>/` first), and refresh plugins and skills. Use the `steps/` scripts when they fit. When the machine needs another path, take it and say why.
-4. **Verify.** Run `mise run doctor`. Fix what fails, or report the exact error.
+4. **Set up Alárinà.** After the `alarina` plugin installs, run `alarina setup`. It sets up Alárinà's own agents and models, so this repo does not.
+5. **Verify.** Run `mise run doctor`. Fix what fails, or report the exact error.
 
 Ask the user for the name the agents should use (`--name`, default: `git config user.name`). Pause for: changes to the user's instruction or settings files, removals, logins (`! gh auth login`, `claude auth login`, `codex login`), `sudo`, and choices between the user's version and the base. Codex plugins marked `login: true` in `base/plugins.yaml` install only after `codex login`.
 
@@ -33,9 +34,9 @@ Run `mise run toolkit` for the install step. LSP names are Claude plugins; langu
 
 ## Files and steps
 
-`base/shared/instructions.md` supplies both instruction templates. Personal voice and the Alárinà usefulness log are opt-in in `examples/personal.md`. Setup lists live in YAML that names each host: `base/plugins.yaml` (plugins and marketplaces), `base/skills.yaml` (source and skill names, verified against installed folders), `base/hooks.yaml` (rendered into each host's native hook format; scripts stay in `base/<host>/hooks/`), `base/toolkit.yaml`, and `base/shared/rules/` (short rules; copied to `~/.claude/rules/` and `~/.codex/rules/`), `base/agents.yaml` (Codex role and model choices; these are not tool release pins). The engine reads them through `yq`; it generates the hooks, `enabledPlugins` and `extraKnownMarketplaces` settings keys and `~/.codex/hooks.json`.
+`base/shared/instructions.md` supplies both instruction templates. Personal voice and the Alárinà usefulness log are opt-in in `examples/personal.md`. Setup lists live in YAML that names each host: `base/plugins.yaml` (plugins and marketplaces), `base/skills.yaml` (source and skill names, verified against installed folders), `base/hooks.yaml` (rendered into each host's native hook format; scripts stay in `base/<host>/hooks/`), and `base/toolkit.yaml`. The engine reads them through `yq`; it generates the hooks, `enabledPlugins` and `extraKnownMarketplaces` settings keys and `~/.codex/hooks.json`.
 
-`steps/check-tools`, `render`, `diff`, `apply`, `plugins`, `skills`, `codex-agents`, `toolkit`, `doctor`, and `capture` can run separately. `steps/setup` runs the sequence. Render prints to stdout by default. Use each step's `--help` for options.
+`steps/check-tools`, `render`, `diff`, `apply`, `plugins`, `skills`, `toolkit`, `doctor`, and `capture` can run separately. `steps/setup` runs the sequence. Render prints to stdout by default. Use each step's `--help` for options.
 
 Capture only the allowed setup files, after reviewing them for secrets. `mise run capture -- --output local/capture` must not copy auth, tokens, history, sessions, caches or MCP OAuth data. Review its output before sharing it. Optional inactive Codex hooks which use `tldr` are carried as source only; setup does not activate them. The machine-local `dcg` command and app-bundled runtime paths are excluded because this base does not install them.
 

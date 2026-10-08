@@ -138,18 +138,7 @@ def desired():
             if client == 'claude' and rel == Path('settings.json'): text = claude_settings(text)
             target = HOME / ('.' + client) / rel
             result[target] = text
-    for rule in sorted((ROOT / 'base/shared/rules').glob('*.md')):
-        for client in ('claude', 'codex'):
-            result[HOME / ('.' + client) / 'rules' / rule.name] = rule.read_text()
     result[HOME / '.codex/hooks.json'] = serial({'hooks': hooks_for('codex')}, '.json')
-    pins = load_yaml('agents.yaml')['codex']
-    caches = sorted((HOME / '.codex/plugins/cache/alarina/alarina').glob('*/codex-agents'), key=lambda p: [int(x) if x.isdigit() else x for x in re.split(r'[.]', p.parent.name)])
-    if caches:
-        for shipped in sorted(caches[-1].glob('*.toml')):
-            lines = [line for line in shipped.read_text().splitlines(keepends=True) if not re.match(r'(model|model_reasoning_effort) = ', line)]
-            pair = pins.get(shipped.stem)
-            pinned = f'model = "{pair["model"]}"\nmodel_reasoning_effort = "{pair["effort"]}"\n' if pair else ''
-            result[HOME / '.codex/agents' / shipped.name] = ''.join(lines[:2]) + pinned + ''.join(lines[2:])
     return result
 
 
@@ -433,7 +422,7 @@ def cleanup(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['plan', 'render', 'diff', 'apply', 'setup', 'check-tools', 'plugins', 'skills', 'codex-agents', 'toolkit', 'doctor', 'capture', 'cleanup'])
+    parser.add_argument('command', choices=['plan', 'render', 'diff', 'apply', 'setup', 'check-tools', 'plugins', 'skills', 'toolkit', 'doctor', 'capture', 'cleanup'])
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--no-login', action='store_true', help='Skip login prompts; public installs still run')
     parser.add_argument('--offline', action='store_true', help='Structural profile only; skip network installs')
@@ -449,7 +438,7 @@ def main():
             for path, (_, value) in plan().items(): print('--- ' + str(path) + '\n' + value)
         else: emit_diff(plan())
         return
-    actions = {'apply': apply, 'setup': setup, 'check-tools': check_tools, 'plugins': plugins, 'skills': skills, 'codex-agents': apply, 'toolkit': toolkit, 'doctor': doctor, 'capture': capture, 'cleanup': cleanup}
+    actions = {'apply': apply, 'setup': setup, 'check-tools': check_tools, 'plugins': plugins, 'skills': skills, 'toolkit': toolkit, 'doctor': doctor, 'capture': capture, 'cleanup': cleanup}
     actions[args.command](args)
 
 if __name__ == '__main__':

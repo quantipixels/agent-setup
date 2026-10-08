@@ -37,7 +37,7 @@ run = "steps/cleanup"
 [tasks.toolkit]
 run = "steps/toolkit"
 [tasks.check]
-run = ["shellcheck steps/check-tools steps/render steps/diff steps/apply steps/setup steps/plugins steps/skills steps/codex-agents steps/toolkit steps/doctor steps/capture steps/cleanup steps/plan base/claude/hooks/*.sh", "gitleaks dir --redact .", "python3 -B -m unittest discover -s tests"]
+run = ["shellcheck steps/check-tools steps/render steps/diff steps/apply steps/setup steps/plugins steps/skills steps/toolkit steps/doctor steps/capture steps/cleanup steps/plan base/claude/hooks/*.sh", "gitleaks dir --redact .", "python3 -B -m unittest discover -s tests"]
 [tasks."check:shell"]
 run = "shellcheck {{arg(name='files', var=true)}}"
 [tasks."check:secrets"]
