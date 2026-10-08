@@ -1,9 +1,10 @@
-# Setup standard
+# Working in this repo
 
-The phase brief defines the repository layout. Use POSIX sh entry scripts and Python 3.11+ standard library for file work. No third-party Python packages.
+This repo sets up Claude Code and Codex on a Mac. `README.md` is the runbook an agent follows; `steps/` are the tools it uses; `base/` is the setup it installs.
 
-Tools use `latest`, as the brief requires. CI actions use immutable commit hashes. `last-good.lock` is rollback evidence, never an install source.
-
-Unlike ordinary product scripts, these steps install tools because setup is the product. Mise automatic install is off; the setup step owns explicit installs. A dry run must not apply files or install dependencies. Mise itself can create cache metadata before a task; track that separately from step writes.
-
-Never store credentials, history, sessions, plugin caches or MCP OAuth data. Keep personal instructions in `examples/`. Preserve host-added JSON and TOML keys. Stop on malformed live files and file conflicts; never discard them to make doctor pass.
+- Write step entry points in POSIX `sh` and file work in `steps/engine.py` with the Python 3.11+ standard library. No third-party packages.
+- Tools, plugins, and skills install at the latest version. `last-good.lock` is for rollback only, never an install source.
+- Keep `plan` and `--dry-run` free of writes and installs.
+- Merge JSON and TOML: base keys win, keys the host added stay. Stop on a malformed live file; never discard it to make doctor pass.
+- Never store credentials, history, sessions, plugin caches, or MCP OAuth data. Personal content goes in `examples/`.
+- Before you commit, run `mise run check` (ShellCheck, gitleaks, tests, actionlint, zizmor).

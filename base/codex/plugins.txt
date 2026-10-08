@@ -1,5 +1,4 @@
 build-macos-apps@openai-curated
 build-web-apps@openai-curated
 test-android-apps@openai-curated
-outlook-email@openai-curated
 alarina@alarina

@@ -189,6 +189,8 @@ def plugins(args):
     (HOME / '.codex').mkdir(parents=True, exist_ok=True)
     run(['codex', 'plugin', 'marketplace', 'upgrade'])
     for name in manifest('codex/plugins.txt'):
+        if name.endswith('@openai-curated') and args.no_login:
+            print('Needs codex login first: ' + name); continue
         run(['codex', 'plugin', 'add', name])
 
 
@@ -301,7 +303,8 @@ def doctor(args):
             for plugin in manifest('codex/plugins.txt'):
                 # Confirm this selector in the CLI's installed inventory, not its cache.
                 if not any(plugin in json.dumps(record) for record in codex_installed):
-                    errors.append('Missing Codex plugin: ' + plugin)
+                    if plugin.endswith('@openai-curated'): print('Pending codex login: ' + plugin)
+                    else: errors.append('Missing Codex plugin: ' + plugin)
     if errors: raise ValueError('Doctor failed:\n' + '\n'.join(errors))
     print('Doctor passed: ' + mode + (' (managed files only; tools, plugins, skills and login were skipped).' if mode == 'offline-structural' else ' (managed files, tools, plugins and skills checked).'))
     if mode != 'full': return
