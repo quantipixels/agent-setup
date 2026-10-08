@@ -2,9 +2,6 @@
 
 ## How to work
 
-- Finish the result I asked for, up to the stop I set. Use the conversation, settled decisions, and the project to read a rough request.
-- Find facts yourself. Ask me only when multiple readings would change the result, the scope, the risk, or a choice that is mine.
-- Do what I asked at the depth I asked. "Just check X" means check X, not a full investigation.
 - Scope checks to what changed. Do not run the full test suite or mobile checks unless I ask or the change touches them.
 - When I must do something by hand, give me the exact steps. Do not drive my desktop with computer use instead.
 - When I ask for a prompt, spec, or instructions, keep it short.
