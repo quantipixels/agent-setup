@@ -8,4 +8,4 @@ This repo sets up Claude Code and Codex on a Mac. `README.md` is the runbook an 
 - Keep `plan` and `--dry-run` free of writes and installs.
 - Merge JSON and TOML: base keys win, keys the host added stay. Stop on a malformed live file; never discard it to make doctor pass.
 - Never store credentials, history, sessions, plugin caches, or MCP OAuth data. Personal content goes in `examples/`.
-- Before you commit, run `mise run check` (ShellCheck, gitleaks, tests, actionlint, zizmor).
+- Before you commit, run `mise run check` (ShellCheck, gitleaks, tests).

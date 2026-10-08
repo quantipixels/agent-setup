@@ -49,6 +49,6 @@ mise run hooks:install
 mise run check
 ```
 
-CI runs on macOS for pull requests, pushes and each night. It runs the checks, plans a scratch install, applies it with no login, and runs doctor. It does not establish authenticated agent behavior.
+Checks run locally: `mise run check` and the lefthook hooks. There is no hosted CI, because setup needs the private `alarina` repo.
 
 Install commands follow the [Claude plugin CLI](https://code.claude.com/docs/en/plugins-reference), [Codex plugin CLI source](https://github.com/openai/codex/blob/main/codex-rs/cli/src/plugin_cmd.rs), and [skills CLI](https://github.com/vercel-labs/skills). Mise tasks disable automatic installs. The direct `steps/diff` is read-only; mise can still create cache metadata before it starts the task. Setup performs explicit latest installs. This differs from the usual tech-stack wrapper rule because installation is this repo's purpose.
