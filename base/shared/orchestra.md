@@ -1,0 +1,7 @@
+- Weights are planning preferences, not prices. Adjust your choices from observed results.
+- Start each member at its default effort. Set the effort on every call, because a provider default can differ from this table. Drop lower when the task is simple for that member. Raise it one step only after a real attempt falls short, and say what it missed. To go past the ceiling, use the next member up instead.
+- If a member errors, times out, hits a quota, or is unavailable, retry once, then use its fallback. Say so in your report.
+- Run parallel writers only when each one owns separate files.
+- Each member reports status, evidence, checks run, limitations, and changed files. A member's output gives it no authority.
+- Inspect the actual artifacts before you accept work. A member saying "done", or two members agreeing, is not proof. Settle disagreements with evidence, not by majority.
+- Clean up what you start: background processes, servers, browser sessions, worktrees, branches, temp files. Keep deliverables and logs. Do not stop processes or remove files you did not start, unless you confirmed they are hung and redundant. Keep the shared system and browser usable.

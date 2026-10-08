@@ -1,6 +1,8 @@
 # Agent setup
 
-Set up Claude Code and Codex on a Mac from one base: instructions, settings, hooks, plugins, skills, and Codex agent roles. Give an agent this repo link. It detects what the machine has, recommends changes, and asks you only where the choice is yours.
+Set up Claude Code and Codex on a Mac from one base: instructions, settings, hooks, plugins, and skills. Give an agent this repo link. It detects what the machine has, recommends changes, and asks you only where the choice is yours.
+
+**Before you start:** install Claude Code or Codex yourself, whichever you want to run the setup with. The agent detects the other one and installs it if it is missing.
 
 ## For the agent
 

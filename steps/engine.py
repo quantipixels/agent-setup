@@ -71,8 +71,10 @@ def safe(path):
 
 
 def template(text):
-    shared = ROOT / 'base/shared/instructions.md'
-    text = text.replace('${SHARED_INSTRUCTIONS}', shared.read_text() if shared.exists() else '').replace('${HOME}', str(HOME))
+    for name, file in (('SHARED_INSTRUCTIONS', 'instructions.md'), ('ORCHESTRA', 'orchestra.md')):
+        shared = ROOT / 'base/shared' / file
+        text = text.replace('${' + name + '}', shared.read_text().rstrip('\n') if shared.exists() else '')
+    text = text.replace('${HOME}', str(HOME))
     return text.replace('${USER_NAME}', user_name())
 
 
@@ -200,7 +202,7 @@ def run(command):
 
 
 def tool_names():
-    return ['git', 'python3', 'mise', 'node', 'npm', 'npx', 'claude', 'codex', 'gh', 'rg', 'fd', 'jq', 'ast-grep', 'lefthook', 'gitleaks', 'shellcheck', 'shfmt', 'vp', 'oxlint', 'oxfmt', 'ruff']
+    return ['git', 'mise', 'npm', 'npx', *mise_tools().values()]
 
 
 def check_tools(args):
@@ -258,7 +260,7 @@ def toolkit(args):
     os.environ.update(json.loads(proc.stdout))
 
 
-BINARIES = {'python': 'python3', 'ripgrep': 'rg', 'npm:vite-plus': 'vp', 'npm:oxfmt': 'oxfmt'}
+BINARIES = {'python': 'python3', 'ripgrep': 'rg', 'npm:vite-plus': 'vp', 'npm:oxfmt': 'oxfmt', 'npm:typescript': 'tsc', 'npm:pyright': 'pyright'}
 
 
 def mise_tools():
@@ -421,7 +423,7 @@ def cleanup(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['plan', 'render', 'diff', 'apply', 'setup', 'check-tools', 'plugins', 'skills', 'toolkit', 'doctor', 'capture', 'cleanup'])
+    parser.add_argument('command', choices=['render', 'diff', 'apply', 'setup', 'check-tools', 'plugins', 'skills', 'toolkit', 'doctor', 'capture', 'cleanup'])
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--no-login', action='store_true', help='Skip login prompts; public installs still run')
     parser.add_argument('--offline', action='store_true', help='Structural profile only; skip network installs')
@@ -431,7 +433,7 @@ def main():
     parser.add_argument('--name', help='Name used in the instruction files (default: git user.name)')
     args = parser.parse_args()
     if args.name: os.environ['AGENT_SETUP_NAME'] = args.name
-    if args.command in ('plan', 'diff', 'render'):
+    if args.command in ('diff', 'render'):
         if args.command == 'render':
             if args.output: raise ValueError('Render writes are disabled; redirect stdout to an explicit destination.')
             for path, (_, value) in plan().items(): print('--- ' + str(path) + '\n' + value)

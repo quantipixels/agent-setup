@@ -1,4 +1,4 @@
-# language -> tools, each with why.
+# language -> tools, each with why. Claude gets language servers from plugins (base/plugins.yaml); these rows are the checks both hosts can run.
 always:
   - tool: rg
     why: Find text quickly
@@ -15,28 +15,24 @@ always:
   - tool: mise
     why: Install latest tools and run tasks
 TS:
-  - tool: typescript-lsp
-    why: Claude TypeScript code intelligence
+  - tool: typescript (tsc)
+    why: Type check TypeScript; the Codex stand-in for a language server
   - tool: vite-plus (vp), oxlint, oxfmt
-    why: Vite+ toolchain: vp check, lint (Oxlint), format (Oxfmt)
+    why: "Vite+ toolchain: vp check, lint (Oxlint), format (Oxfmt)"
 Python:
-  - tool: pyright-lsp
-    why: Claude Python code intelligence
+  - tool: pyright
+    why: Type check Python; the Codex stand-in for a language server
   - tool: ruff
     why: Python format and lint
 Kotlin/Java:
-  - tool: kotlin-lsp
-    why: Claude Kotlin code intelligence
-  - tool: jdtls-lsp
-    why: Claude Java code intelligence
+  - tool: gradle or mvn
+    why: Compile and test; use the project build as the check
 Rust:
-  - tool: rust-analyzer-lsp
-    why: Claude Rust code intelligence
+  - tool: cargo clippy
+    why: Lint and type check Rust (comes with rustup)
 Swift:
-  - tool: swift-lsp
-    why: Claude Swift code intelligence
-  - tool: swiftui-pro
-    why: SwiftUI review skill
+  - tool: swift build
+    why: Compile and type check Swift (comes with Xcode)
 Shell:
   - tool: shellcheck
     why: Check shell scripts

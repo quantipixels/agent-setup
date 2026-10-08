@@ -15,8 +15,6 @@ marketplaces:
     hosts: [claude, codex]
 
 plugins:
-  - job: Frontend design guidance
-    claude: frontend-design@claude-plugins-official
   - job: Simplify code
     claude: code-simplifier@claude-plugins-official
   - job: Build plugins
