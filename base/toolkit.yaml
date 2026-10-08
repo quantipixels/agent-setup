@@ -14,6 +14,8 @@ always:
     why: Detect secrets
   - tool: mise
     why: Install latest tools and run tasks
+  - tool: SIGIDI (app)
+    why: Desktop workspace where Claude Code and Codex run; install from quantipixels/sigidi-release if missing
 TS:
   - tool: typescript (tsc)
     why: Type check TypeScript; the Codex stand-in for a language server
