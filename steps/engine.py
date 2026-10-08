@@ -224,7 +224,6 @@ def plugins(args):
     (HOME / '.codex').mkdir(parents=True, exist_ok=True)
     run(['codex', 'plugin', 'marketplace', 'upgrade'])
     for row in plugin_rows('codex'):
-        if row.get('builtin'): continue
         if row.get('login') and args.no_login:
             print('Needs codex login first: ' + row['codex']); continue
         run(['codex', 'plugin', 'add', row['codex']])

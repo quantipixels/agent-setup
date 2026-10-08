@@ -1,6 +1,5 @@
 # One row per job. `claude` and `codex` name the plugin on each host as plugin@marketplace.
 # login: Codex curated plugin; installs only after `codex login`.
-# builtin: ships with the host; doctor checks it, setup does not install it.
 marketplaces:
   - name: claude-plugins-official
     source: anthropics/claude-plugins-official
@@ -40,8 +39,6 @@ plugins:
     claude: codex@openai-codex
   - job: Code review
     claude: code-review@claude-plugins-official
-    codex: code-review@openai-bundled
-    builtin: true
   - job: Create skills
     claude: skill-creator@claude-plugins-official
   - job: Browser automation
