@@ -164,7 +164,7 @@ def manifest(name):
 
 
 def tool_names():
-    return ['git', 'python3', 'mise', 'node', 'npm', 'npx', 'claude', 'codex', 'gh', 'rg', 'fd', 'jq', 'ast-grep', 'lefthook', 'gitleaks', 'shellcheck', 'shfmt', 'biome', 'ruff']
+    return ['git', 'python3', 'mise', 'node', 'npm', 'npx', 'claude', 'codex', 'gh', 'rg', 'fd', 'jq', 'ast-grep', 'lefthook', 'gitleaks', 'shellcheck', 'shfmt', 'vp', 'oxlint', 'oxfmt', 'ruff']
 
 
 def check_tools(args):
@@ -216,7 +216,7 @@ def toolkit(args):
     os.environ.update(json.loads(proc.stdout))
 
 
-BINARIES = {'python': 'python3', 'ripgrep': 'rg'}
+BINARIES = {'python': 'python3', 'ripgrep': 'rg', 'npm:vite-plus': 'vp', 'npm:oxfmt': 'oxfmt'}
 
 
 def mise_tools():

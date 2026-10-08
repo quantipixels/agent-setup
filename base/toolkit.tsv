@@ -7,7 +7,7 @@ always	lefthook	Run Git checks
 always	gitleaks	Detect secrets
 always	mise	Install latest tools and run tasks
 TS	typescript-lsp	Claude TypeScript code intelligence
-TS	biome	TypeScript format and lint
+TS	vite-plus (vp), oxlint, oxfmt	Vite+ toolchain: vp check, lint (Oxlint), format (Oxfmt)
 Python	pyright-lsp	Claude Python code intelligence
 Python	ruff	Python format and lint
 Kotlin/Java	kotlin-lsp	Claude Kotlin code intelligence

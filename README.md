@@ -22,7 +22,7 @@ Start a new Claude Code and Codex session after setup, so the new files load.
 | Language | Tool | Why |
 | --- | --- | --- |
 | Always | rg, fd, jq, ast-grep, lefthook, gitleaks, mise | Search, inspect JSON, match code, run checks, find secrets, manage tools |
-| TS | typescript-lsp, biome | Code intelligence, format and lint |
+| TS | typescript-lsp, Vite+ (`vp`), oxlint, oxfmt | Code intelligence; Vite+ toolchain with Oxc lint and format |
 | Python | pyright-lsp, ruff | Code intelligence, format and lint |
 | Kotlin/Java | kotlin-lsp, jdtls-lsp | Code intelligence |
 | Rust | rust-analyzer-lsp | Code intelligence |
