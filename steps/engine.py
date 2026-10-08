@@ -72,7 +72,16 @@ def safe(path):
 
 def template(text):
     shared = ROOT / 'base/shared/instructions.md'
-    return text.replace('${SHARED_INSTRUCTIONS}', shared.read_text() if shared.exists() else '').replace('${HOME}', str(HOME))
+    text = text.replace('${SHARED_INSTRUCTIONS}', shared.read_text() if shared.exists() else '').replace('${HOME}', str(HOME))
+    return text.replace('${USER_NAME}', user_name())
+
+
+def user_name():
+    name = os.environ.get('AGENT_SETUP_NAME', '').strip()
+    if not name:
+        proc = subprocess.run(['git', 'config', '--global', 'user.name'], text=True, capture_output=True)
+        name = proc.stdout.strip()
+    return name or '<your name>'
 
 
 def desired():
@@ -386,7 +395,9 @@ def main():
     parser.add_argument('--yes', action='store_true', help='Approve overwrites of conflicting managed text files')
     parser.add_argument('--approve-removals', action='store_true')
     parser.add_argument('--output')
+    parser.add_argument('--name', help='Name used in the instruction files (default: git user.name)')
     args = parser.parse_args()
+    if args.name: os.environ['AGENT_SETUP_NAME'] = args.name
     if args.command in ('plan', 'diff', 'render'):
         if args.command == 'render':
             if args.output: raise ValueError('Render writes are disabled; redirect stdout to an explicit destination.')

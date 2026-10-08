@@ -11,7 +11,7 @@ Goal: this machine runs the base setup for Claude Code and Codex, with the user'
 3. **Do.** After the user agrees, install only what is missing, apply the files (a backup goes to `~/.agent-setup/backups/<date>/` first), and refresh plugins and skills. Use the `steps/` scripts when they fit. When the machine needs another path, take it and say why.
 4. **Verify.** Run `mise run doctor`. Fix what fails, or report the exact error.
 
-Pause for: changes to the user's instruction or settings files, removals, logins (`! gh auth login`, `claude auth login`, `codex login`), `sudo`, and choices between the user's version and the base. Codex `@openai-curated` plugins install only after `codex login`.
+Ask the user for the name the agents should use (`--name`, default: `git config user.name`). Pause for: changes to the user's instruction or settings files, removals, logins (`! gh auth login`, `claude auth login`, `codex login`), `sudo`, and choices between the user's version and the base. Codex `@openai-curated` plugins install only after `codex login`.
 
 Done when: doctor passes, and the report lists what changed, what was skipped, the available updates, and what the user still has to do.
 

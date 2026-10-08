@@ -1,4 +1,4 @@
-# Working with the team
+# Working with **${USER_NAME}**
 
 ## How to work
 
