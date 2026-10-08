@@ -138,6 +138,9 @@ def desired():
             if client == 'claude' and rel == Path('settings.json'): text = claude_settings(text)
             target = HOME / ('.' + client) / rel
             result[target] = text
+    for rule in sorted((ROOT / 'base/shared/rules').glob('*.md')):
+        for client in ('claude', 'codex'):
+            result[HOME / ('.' + client) / 'rules' / rule.name] = rule.read_text()
     result[HOME / '.codex/hooks.json'] = serial({'hooks': hooks_for('codex')}, '.json')
     pins = load_yaml('agents.yaml')['codex']
     caches = sorted((HOME / '.codex/plugins/cache/alarina/alarina').glob('*/codex-agents'), key=lambda p: [int(x) if x.isdigit() else x for x in re.split(r'[.]', p.parent.name)])

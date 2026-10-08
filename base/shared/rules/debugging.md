@@ -1,4 +1,4 @@
-# Research Before Looping
+# Debugging
 
 When a fix attempt fails twice on the same issue, STOP and research the tool's documented limitations before trying a third time.
 
@@ -29,3 +29,11 @@ Attempt 1: fails → adjust, retry
 Attempt 2: fails → "let me try Y"
 Attempt 3: fails → STOP → research official docs, best practices, GitHub issues, etc → distill to 2–3 viable options with trade-offs and present to user
 ```
+
+## Bug autopsy
+
+After you fix a bug, say why it happened and what would stop that kind of bug next time: a test, a check, a type, a hook. If nothing would, say so.
+
+## Step back
+
+If the user says "step back" or "we're going in circles", drop the current approach. Read the whole relevant section top-down, say where your model was wrong, and propose something different.
