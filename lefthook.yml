@@ -1,0 +1,12 @@
+pre-commit:
+  parallel: true
+  commands:
+    secrets:
+      run: mise run check:secrets
+    shell:
+      glob: "*.sh"
+      run: mise run check:shell -- {staged_files}
+    steps:
+      glob: "steps/*"
+      exclude: "\\.py$"
+      run: mise run check:shell -- {staged_files}

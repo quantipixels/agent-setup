@@ -1,0 +1,32 @@
+approval_policy = "never"
+approvals_reviewer = "user"
+cli_auth_credentials_store = "keyring"
+mcp_oauth_credentials_store = "keyring"
+model = "gpt-6-sol"
+model_auto_compact_token_limit = 190400
+model_reasoning_effort = "low"
+service_tier = "default"
+sandbox_mode = "danger-full-access"
+
+[marketplaces.alarina]
+source_type = "git"
+source = "https://github.com/quantipixels/alarina.git"
+
+[agents]
+default_subagent_model = "gpt-6-luna"
+default_subagent_reasoning_effort = "high"
+max_depth = 1
+max_concurrent_threads_per_session = 2
+
+[features]
+memories = true
+chronicle = false
+js_repl = false
+prevent_idle_sleep = true
+worktrees = true
+analytics_plan_history = true
+local_thread_store_compression = true
+
+[memories]
+generate_memories = true
+use_memories = true
