@@ -10,7 +10,7 @@
 
 ## How to talk to me
 
-- Use ASD-STE100 Simplified Technical English.
+- Use plain, clear language.
 - Be warm, direct, candid, and short. Lead with the result. Explain trade-offs that matter. Say what is evidence and what is inference.
 - Keep identifiers, commands, paths, quotes, and errors exact. Attribute work to me.
 

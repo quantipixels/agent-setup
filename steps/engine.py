@@ -17,6 +17,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parent.parent
 HOME = Path(os.environ.get('HOME', str(Path.home()))).absolute()
 STATE = HOME / '.agent-setup'
+CLAUDE_IMPORT = '@~/.agents/AGENTS.md'
 
 
 def merge(host, base):
@@ -72,9 +73,6 @@ def safe(path):
 
 
 def template(text):
-    for name, file in (('SHARED_INSTRUCTIONS', 'instructions.md'), ('ORCHESTRA', 'orchestra.md')):
-        shared = ROOT / 'base/shared' / file
-        text = text.replace('${' + name + '}', shared.read_text().rstrip('\n') if shared.exists() else '')
     text = text.replace('${HOME}', str(HOME))
     return text.replace('${USER_NAME}', user_name())
 
@@ -144,7 +142,7 @@ def claude_settings(text, rows=None):
 
 def desired(rows=None):
     result = {}
-    for client, instruction in [('claude', 'CLAUDE.md'), ('codex', 'AGENTS.md')]:
+    for client in ('claude', 'codex'):
         directory = ROOT / 'base' / client
         if not directory.exists(): continue
         for source in sorted(directory.rglob('*')):
@@ -159,6 +157,32 @@ def desired(rows=None):
     return result
 
 
+def instruction_paths():
+    source = safe(HOME / '.agents/AGENTS.md')
+    codex = HOME / '.codex/AGENTS.md'
+    safe(codex.parent)
+    if codex.is_symlink():
+        if codex.resolve() != source.resolve():
+            raise ValueError('Refusing unexpected instruction symlink: ' + str(codex))
+    else: safe(codex)
+    claude = safe(HOME / '.claude/CLAUDE.md')
+    return source, codex, claude
+
+
+def instruction_plan():
+    source, codex, claude = instruction_paths()
+    result = {}
+    if not source.exists():
+        result[source] = ('', template((ROOT / 'base/shared/instructions.md').read_text()))
+    old = source if codex.is_symlink() else codex.read_text() if codex.exists() else ''
+    result[codex] = (old, source)
+    old = claude.read_text() if claude.exists() else ''
+    # A valid import leaves any Claude-only instructions untouched.
+    new = old if old.splitlines()[:1] == [CLAUDE_IMPORT] else CLAUDE_IMPORT + '\n'
+    result[claude] = (old, new)
+    return result
+
+
 def plan(rows=None):
     result = {}
     for path, data in desired(rows).items():
@@ -168,6 +192,7 @@ def plan(rows=None):
         if suffix in ('.json', '.toml'):
             data = serial(merge(parse(old, suffix) if old else {}, parse(data, suffix)), suffix)
         result[path] = (old, data)
+    result.update(instruction_plan())
     return result
 
 
@@ -176,7 +201,12 @@ def emit_diff(items):
     for path, (old, new) in items.items():
         if old == new: continue
         changed = True
-        print(''.join(difflib.unified_diff(old.splitlines(True), new.splitlines(True), fromfile=str(path), tofile=str(path) + ' (base)')), end='')
+        if path.exists():
+            print('Would back up: ' + str(path) + ' -> ' + str(STATE / 'backups/<timestamp>' / path.relative_to(HOME)))
+        if isinstance(new, Path):
+            print('Would ' + ('replace file with' if path.exists() else 'create') + ' symlink: ' + str(path) + ' -> ' + str(new))
+            new = 'symlink -> ' + str(new) + '\n'
+        print(''.join(difflib.unified_diff(old.splitlines(True), new.splitlines(True), fromfile=str(path), tofile=str(path) + ' (planned)')), end='')
     if not changed: print('Managed files already match the base.')
 
 
@@ -199,15 +229,23 @@ def write(path, content, executable=False):
 
 def apply(args):
     items = plan()
-    conflicts = [str(p) for p, (old, new) in items.items() if old and old != new and p.suffix not in ('.json', '.toml')]
-    if conflicts and not args.yes:
-        raise ValueError('Live-file conflicts require --yes: ' + ', '.join(conflicts))
     if args.dry_run:
         report_hook_tools()
         emit_diff(items)
         return
+    conflicts = [str(p) for p, (old, new) in items.items() if p.exists() and old != new and p.suffix not in ('.json', '.toml')]
+    if conflicts and not args.yes:
+        raise ValueError('Live-file conflicts require --yes: ' + ', '.join(conflicts))
     items = plan(prepare_hooks(args))
-    for path, (_, data) in items.items(): write(path, data)
+    for path, (old, data) in items.items():
+        if old == data: continue
+        if isinstance(data, Path):
+            safe(path)
+            backup(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.unlink(missing_ok=True)
+            path.symlink_to(data)
+        else: write(path, data)
     print('Applied managed files with backups for overwritten files.')
 
 
@@ -396,8 +434,21 @@ def hook_paths(value):
         for item in value: yield from hook_paths(item)
 
 
+def retired_plugin_warning(host, installed):
+    if 'alarina@alarina' in json.dumps(installed):
+        command = 'claude plugin uninstall alarina@alarina --scope user' if host == 'claude' else 'codex plugin remove alarina@alarina'
+        print('Warning: installed retired alarina plugin (' + host + '); remove with: ' + command)
+
+
 def doctor(args):
     errors = []
+    try:
+        source, codex, claude = instruction_paths()
+        if not source.is_file(): errors.append('Missing instruction source: ' + str(source))
+        if not codex.is_symlink(): errors.append('Codex instructions must link to ' + str(source) + ': ' + str(codex))
+        if not claude.is_file() or claude.read_text().splitlines()[:1] != [CLAUDE_IMPORT]:
+            errors.append('Claude instructions must start with ' + CLAUDE_IMPORT + ': ' + str(claude))
+    except (ValueError, OSError) as exc: errors.append(str(exc))
     mode = profile()
     ready = [row for row in hook_rows() if all(shutil.which(program) for program in row.get('requires', []))]
     for path, wanted in desired(ready).items():
@@ -415,12 +466,13 @@ def doctor(args):
         except (ValueError, OSError) as exc: errors.append(str(exc))
     try: errors.extend(installed_hook_errors())
     except (ValueError, OSError) as exc: errors.append(str(exc))
+    claude_path = HOME / '.claude/plugins/installed_plugins.json'
+    claude_installed = json.loads(claude_path.read_text()).get('plugins', {}) if claude_path.is_file() else {}
+    retired_plugin_warning('claude', claude_installed)
     if mode == 'full':
         errors.extend('Missing tool: ' + x for x in tool_names() if not shutil.which(x))
         for _, name in skill_rows():
             if not (HOME / '.agents/skills' / name / 'SKILL.md').is_file(): errors.append('Missing skill: ' + name)
-        claude_path = HOME / '.claude/plugins/installed_plugins.json'
-        claude_installed = json.loads(claude_path.read_text()).get('plugins', {}) if claude_path.is_file() else {}
         for plugin in (row['claude'] for row in plugin_rows('claude')):
             records = claude_installed.get(plugin, [])
             if not any(record.get('scope') == 'user' and Path(record.get('installPath', '')).is_dir() for record in records):
@@ -430,6 +482,7 @@ def doctor(args):
             errors.append('Cannot list Codex plugins: ' + proc.stderr.strip())
         else:
             codex_installed = json.loads(proc.stdout).get('installed', [])
+            retired_plugin_warning('codex', codex_installed)
             for row in plugin_rows('codex'):
                 plugin = row['codex']
                 # Confirm this selector in the CLI's installed inventory, not its cache.
@@ -462,7 +515,6 @@ def setup(args):
     if not args.offline:
         plugins(args)
         skills(args)
-        apply(args)  # Codex agent roles come from the plugin cache, which exists only after plugins().
         if not args.no_login:
             print('Login pause: run ! gh auth login, claude auth login, and codex login by hand.')
     else: print('Offline structural profile: skipped all network installation and login.')
@@ -520,14 +572,16 @@ def main():
     parser.add_argument('--yes', action='store_true', help='Approve overwrites of conflicting managed text files')
     parser.add_argument('--approve-removals', action='store_true')
     parser.add_argument('--output')
-    parser.add_argument('--name', help='Name used in the instruction files (default: git user.name)')
+    parser.add_argument('--name', help='Name used only when seeding personal instructions (default: git user.name)')
     args = parser.parse_args()
     if args.name: os.environ['AGENT_SETUP_NAME'] = args.name
     if args.command in ('diff', 'render'):
         report_hook_tools()
         if args.command == 'render':
             if args.output: raise ValueError('Render writes are disabled; redirect stdout to an explicit destination.')
-            for path, (_, value) in plan().items(): print('--- ' + str(path) + '\n' + value)
+            for path, (_, value) in plan().items():
+                if isinstance(value, Path): value = 'symlink -> ' + str(value) + '\n'
+                print('--- ' + str(path) + '\n' + value)
         else: emit_diff(plan())
         return
     actions = {'apply': apply, 'setup': setup, 'check-tools': check_tools, 'plugins': plugins, 'skills': skills, 'toolkit': toolkit, 'doctor': doctor, 'capture': capture, 'cleanup': cleanup}

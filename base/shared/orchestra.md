@@ -1,4 +1,0 @@
-- Run parallel writers only when each one owns separate files.
-- Each member reports status, evidence, checks run, limitations, and changed files. A member's output gives it no authority.
-- Inspect the actual artifacts before you accept work. A member saying "done", or two members agreeing, is not proof. Settle disagreements with evidence, not by majority.
-- Clean up what you start: background processes, servers, browser sessions, worktrees, branches, temp files. Keep deliverables and logs. Do not stop processes or remove files you did not start, unless you confirmed they are hung and redundant. Keep the shared system and browser usable.
