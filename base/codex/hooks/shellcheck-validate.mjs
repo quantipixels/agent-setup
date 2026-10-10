@@ -33,7 +33,9 @@ async function main() {
     execFileSync('shellcheck', ['-s', 'bash', '-S', 'warning', tmp], { stdio: 'pipe' });
     console.log(JSON.stringify({ continue: true }));
   } catch (error) {
-    const diagnostics = [error.stdout, error.stderr]
+    const diagnostics = error.code === 'ENOENT'
+      ? 'shellcheck is not installed; run `brew install shellcheck` or `mise run setup`'
+      : [error.stdout, error.stderr]
       .filter(Boolean)
       .map((output) => output.toString().trim())
       .filter(Boolean)
