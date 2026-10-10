@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tomllib
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 HOME = Path(os.environ.get('HOME', str(Path.home()))).absolute()
@@ -80,9 +81,11 @@ _YAML = {}
 
 
 def load_yaml(name):
-    """Read base/<name> through yq (JSON output). Falls back to mise when yq is not on PATH."""
+    """Read base/<name> through yq without implicitly installing a parser."""
     if name not in _YAML:
-        command = ['yq'] if shutil.which('yq') else ['mise', 'exec', 'yq@latest', '--', 'yq']
+        if not shutil.which('yq'):
+            raise ValueError('yq is required to read setup lists; install it first with mise install yq.')
+        command = ['yq']
         proc = subprocess.run([*command, '-o=json', '.', str(ROOT / 'base' / name)], text=True, capture_output=True)
         if proc.returncode: raise ValueError('Cannot read base/' + name + ': ' + proc.stderr.strip())
         _YAML[name] = json.loads(proc.stdout)
@@ -220,13 +223,16 @@ def write(path, content, executable=False):
 
 def apply(args):
     items = plan()
+    projects = project_toolchains(args)
     if args.dry_run:
         report_hook_tools()
+        report_projects(args, projects)
         emit_diff(items)
         return
     conflicts = [str(p) for p, (old, new) in items.items() if p.exists() and old != new and p.suffix not in ('.json', '.toml')]
     if conflicts and not args.yes:
         raise ValueError('Live-file conflicts require --yes: ' + ', '.join(conflicts))
+    prepare_projects(args, projects)
     items = plan(prepare_hooks(args))
     for path, (old, data) in items.items():
         if old == data: continue
@@ -306,11 +312,12 @@ def toolkit(args, exclude=()):
 
 def install_tools(wanted):
     """Install missing mise tools and activate their binaries, shared by toolkit and hooks."""
-    missing = [name for name, binary in wanted.items() if not shutil.which(binary)]
+    missing = [name for name, binary in wanted.items() if not (project_tool_present(name, binary) if '@' in name else shutil.which(binary))]
     for name in wanted:
         if name not in missing: print('Skipped (already installed): ' + name + ' ' + tool_version(wanted[name]))
     if missing: run(['mise', 'install', '--cd', str(ROOT), *missing])
-    proc = subprocess.run(['mise', 'env', '--json', '--cd', str(ROOT)], env=install_env(), text=True, capture_output=True, check=True)
+    versions = [name for name in wanted if '@' in name]
+    proc = subprocess.run(['mise', 'env', '--json', '--cd', str(ROOT), *versions], env=dict(install_env(), MISE_AUTO_INSTALL='false'), text=True, capture_output=True, check=True)
     os.environ.update(json.loads(proc.stdout))
 
 
@@ -320,6 +327,131 @@ BINARIES = {'python': 'python3', 'ripgrep': 'rg', 'npm:vite-plus': 'vp', 'npm:ox
 def mise_tools():
     tools = tomllib.loads((ROOT / 'mise.toml').read_text()).get('tools', {})
     return {name: BINARIES.get(name, name) for name in tools}
+
+
+def project_roots(args):
+    return list(dict.fromkeys(Path(root).expanduser().absolute() for root in (getattr(args, 'projects', None) or [HOME / 'Projects'])))
+
+
+def project_pins(directory):
+    """Only this project's explicit tool declarations; never execute its mise config."""
+    pins = {}
+    path = directory / '.tool-versions'
+    if path.is_file() and not path.is_symlink():
+        for line in path.read_text().splitlines():
+            parts = line.partition('#')[0].split()
+            if len(parts) > 1: pins[parts[0]] = parts[1:]
+    path = directory / 'mise.toml'
+    if path.is_file() and not path.is_symlink():
+        for name, value in tomllib.loads(path.read_text()).get('tools', {}).items():
+            values = value if isinstance(value, list) else [value]
+            versions = [item.get('version') if isinstance(item, dict) else item for item in values]
+            if any(not isinstance(version, str) or not version for version in versions):
+                raise ValueError('Expected a tool version string in ' + str(path) + ': ' + name)
+            pins[name.removeprefix('core:')] = versions
+    return pins
+
+
+def java_build_version(directory):
+    path = directory / 'pom.xml'
+    if path.is_file() and not path.is_symlink():
+        try: pom = ET.fromstring(path.read_text())
+        except ET.ParseError as exc: raise ValueError('Cannot read ' + str(path) + ': ' + str(exc)) from exc
+        # Maven's default namespace must not change the property/configuration lookup.
+        for element in pom.iter(): element.tag = element.tag.rsplit('}', 1)[-1]
+        properties = {element.tag: (element.text or '').strip() for element in pom.findall('./properties/*')}
+        releases = [properties.get('maven.compiler.release', '')]
+        releases.extend((plugin.findtext('./configuration/release') or '').strip() for plugin in pom.findall('./build//plugin') if plugin.findtext('artifactId') == 'maven-compiler-plugin')
+        releases.append(properties.get('java.version', ''))
+        for value in releases:
+            seen = set()
+            while re.fullmatch(r'\$\{[^}]+\}', value) and value not in seen:
+                seen.add(value)
+                value = properties.get(value[2:-1], '')
+            if re.fullmatch(r'(?:1\.)?\d+', value): return value.removeprefix('1.')
+    for filename in ('build.gradle', 'build.gradle.kts'):
+        path = directory / filename
+        if not path.is_file() or path.is_symlink(): continue
+        text = re.sub(r'/\*.*?\*/|//[^\n]*', '', path.read_text(), flags=re.S)
+        match = re.search(r'toolchain\s*\{[^}]*?languageVersion\s*(?:=\s*|\.set\s*\(\s*)?JavaLanguageVersion\.of\s*\(\s*(\d+)\s*\)', text, re.S)
+        if match: return match.group(1)
+    return None
+
+
+def project_toolchains(args):
+    data = load_yaml('project-toolchains.yaml')
+    found = {}
+    def scan(directory, depth, wrapper=False):
+        if directory.is_symlink() or not directory.is_dir() or directory in found: return
+        files = {path.name for path in directory.iterdir() if path.is_file() and not path.is_symlink()}
+        exclusions = files | ({'gradlew'} if wrapper else set())
+        tools, markers = [], set()
+        for rule in data['rules']:
+            matches = files.intersection(rule['files'])
+            if matches and not exclusions.intersection(rule.get('unless', [])) and set(rule.get('requires', [])).issubset(files):
+                tools.extend(rule['tools'])
+                markers.update(matches)
+        if tools:
+            pins = project_pins(directory)
+            if 'java' in tools and 'java' not in pins:
+                version = java_build_version(directory)
+                if version: pins['java'] = [version]
+            # Python is in the base toolkit, but a Python project may need another runtime.
+            if 'uv' in tools and 'python' in pins: tools.append('python')
+            wanted = {tool + '@' + version: data['binaries'][tool] for tool in dict.fromkeys(tools) for version in pins.get(tool, ['latest'])}
+            found[directory] = {'files': sorted(markers), 'tools': wanted}
+        if depth < 2:
+            for child in sorted(directory.iterdir()):
+                if child.name not in data['skip_directories']: scan(child, depth + 1, wrapper or 'gradlew' in files)
+    for root in project_roots(args): scan(root, 0)
+    return found
+
+
+def project_tool_present(spec, binary):
+    name, version = spec.split('@', 1)
+    if shutil.which(binary):
+        if version in ('latest', 'system') and name != 'java': return True
+        # macOS ships a java launcher even when no JDK is installed.
+        proc = subprocess.run([binary, '-version' if name == 'java' else '--version'], capture_output=True, text=True, timeout=20)
+        if proc.returncode == 0:
+            if version in ('latest', 'system'): return True
+            match = re.search(r'\d+\.\d+(?:\.\d+)?', proc.stdout + proc.stderr)
+            installed = match.group(0).removeprefix('1.') if match and name == 'java' else match.group(0) if match else ''
+            if re.fullmatch(r'\d+(?:\.\d+)*', version) and (installed == version or installed.startswith(version + '.')): return True
+    if version == 'system' or not shutil.which('mise'): return False
+    command = ['mise', '--no-config', 'where', name if version == 'latest' else spec]
+    proc = subprocess.run(command, env=dict(install_env(), MISE_OFFLINE='true', MISE_AUTO_INSTALL='false'), capture_output=True, text=True)
+    return proc.returncode == 0
+
+
+def project_requirements(projects):
+    return {spec: binary for project in projects.values() for spec, binary in project['tools'].items()}
+
+
+def project_install_command(wanted):
+    return ['mise', 'install', '--cd', str(ROOT), *wanted]
+
+
+def report_projects(args, projects):
+    print('Project roots (up to two levels): ' + ', '.join(map(str, project_roots(args))))
+    if not projects: print('No project toolchains detected.')
+    for directory, project in projects.items():
+        print('Project: ' + str(directory) + ' (' + ', '.join(project['files']) + ')')
+        print('  Needs: ' + ', '.join(project['tools']))
+    wanted = project_requirements(projects)
+    missing = [spec for spec, binary in wanted.items() if not project_tool_present(spec, binary)]
+    print('Would install project toolchains: ' + (shlex.join(project_install_command(missing)) if missing else 'none (all detected requirements are installed).'))
+    if args.offline: print('Offline: project toolchain installation skipped.')
+    return missing
+
+
+def prepare_projects(args, projects):
+    missing = report_projects(args, projects)
+    if args.offline or not missing: return
+    if not args.yes: raise ValueError('Project toolchain installation requires plan approval first; use --yes after approval.')
+    if any(spec.endswith('@system') for spec in missing):
+        raise ValueError('A project requests a missing system tool; provide it on PATH or choose a mise version: ' + ', '.join(missing))
+    install_tools(project_requirements(projects))
 
 
 def hook_installer(program):
@@ -462,6 +594,12 @@ def doctor(args):
     retired_plugin_warning('claude', claude_installed)
     if mode == 'full':
         errors.extend('Missing tool: ' + x for x in tool_names() if not shutil.which(x))
+        projects = project_toolchains(args)
+        report_projects(args, projects)
+        for directory, project in projects.items():
+            for spec, binary in project['tools'].items():
+                if not project_tool_present(spec, binary):
+                    errors.append('Missing project toolchain: ' + str(directory) + ' needs ' + spec + '; install: ' + shlex.join(project_install_command([spec])))
         for _, name in skill_rows():
             if not (HOME / '.agents/skills' / name / 'SKILL.md').is_file(): errors.append('Missing skill: ' + name)
         for plugin in (row['claude'] for row in plugin_rows('claude')):
@@ -494,14 +632,16 @@ def doctor(args):
 def setup(args):
     if args.dry_run:
         report_hook_tools()
+        report_projects(args, project_toolchains(args))
         emit_diff(plan())
         print('Plan only: no writes, installs or authentication.')
         return
     if not args.yes:
         raise ValueError('Setup requires diff approval first; use --yes after approval.')
     plan()  # Validate malformed live files before installs.
+    projects = project_toolchains(args)
     if not args.offline:
-        toolkit(args, exclude=hook_programs())
+        toolkit(args, exclude=[*hook_programs(), *project_requirements(projects).values()])
     apply(args)
     if not args.offline:
         plugins(args)
@@ -563,9 +703,11 @@ def main():
     parser.add_argument('--yes', action='store_true', help='Approve overwrites of conflicting managed text files')
     parser.add_argument('--approve-removals', action='store_true')
     parser.add_argument('--output')
+    parser.add_argument('--projects', action='append', metavar='DIR', help='Project root to scan (repeatable; default: ~/Projects, up to two levels deep)')
     args = parser.parse_args()
     if args.command in ('diff', 'render'):
         report_hook_tools()
+        report_projects(args, project_toolchains(args))
         if args.command == 'render':
             if args.output: raise ValueError('Render writes are disabled; redirect stdout to an explicit destination.')
             for path, (_, value) in plan().items():
