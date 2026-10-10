@@ -10,22 +10,14 @@ skills:
     skills: [frontend-design]
   - source: pbakaus/impeccable
     skills: [impeccable]
-  - source: mattpocock/skills
-    skills: [improve-codebase-architecture]
   - source: jakubkrehel/skills
     skills: [better-interface]
-  - source: warpdotdev/common-skills
-    skills: [skill-doctor]
   - source: twostraws/swiftui-agent-skill
     skills: [swiftui-pro]
   - source: appllama/appllama-skills
     skills: [appllama-app-design-skill, appllama-usage]
   - source: emilkowalski/skills
     skills: [animate, animation-vocabulary, apple-design, emil-design-eng, improve-animations]
-  - source: wshobson/agents
-    skills: [interaction-design]
-  - source: Superfuture/design-review
-    skills: [design-review]
   - source: https://fframes.studio
     skills: [fframes-video]
   - source: quantipixels/tech-stack

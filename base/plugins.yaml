@@ -10,13 +10,11 @@ marketplaces:
   - name: ast-grep-marketplace
     source: ast-grep/agent-skill
     hosts: [claude]
-  - name: alarina
-    source: quantipixels/alarina
+  - name: qp-skills
+    source: quantipixels/skills
     hosts: [claude, codex]
 
 plugins:
-  - job: Simplify code
-    claude: code-simplifier@claude-plugins-official
   - job: Build plugins
     claude: plugin-dev@claude-plugins-official
   - job: TypeScript code intelligence
@@ -35,17 +33,13 @@ plugins:
     claude: hookify@claude-plugins-official
   - job: Codex from Claude Code
     claude: codex@openai-codex
-  - job: Code review
-    claude: code-review@claude-plugins-official
-  - job: Create skills
-    claude: skill-creator@claude-plugins-official
   - job: Browser automation
     claude: playwright@claude-plugins-official
   - job: Structural code search
     claude: ast-grep@ast-grep-marketplace
-  - job: Alárinà engineering workflow
-    claude: alarina@alarina
-    codex: alarina@alarina
+  - job: QP skills and personal defaults
+    claude: qp-skills@qp-skills
+    codex: qp-skills@qp-skills
   - job: Modern web guidance
     claude: modern-web-guidance@claude-plugins-official
     codex: modern-web-guidance@openai-curated-remote
