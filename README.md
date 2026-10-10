@@ -22,13 +22,13 @@ Goal: this machine runs the base setup for Claude Code and Codex, and the user's
 
 Hook rows in `base/hooks.yaml` can declare `requires: [program, ...]`. Setup and apply install missing hook programs through the same mise path as toolkit tools, then enable only hooks whose requirements are on PATH. An unavailable program skips its hook with a reason and install command; offline mode skips installation. Plan and `--dry-run` show missing requirements without installing or writing. Doctor and check-tools report missing requirements of installed hooks, including in the offline structural profile. Program names map to the tools declared in `mise.toml` (for example, `python3` maps to `python`).
 
-Ask for the name to use when seeding missing personal instructions (`--name`, default `git config user.name`). Pause for edits to the user's instruction or settings files, removals, logins (`claude auth login`, `codex login`, `gh auth login`), `sudo`, and choices between the user's version and the base. Codex plugins marked `login: true` install only after `codex login`.
+Pause for edits to the user's instruction or settings files, removals, logins (`claude auth login`, `codex login`, `gh auth login`), `sudo`, and choices between the user's version and the base. Codex plugins marked `login: true` install only after `codex login`.
 
 Done when doctor passes and the report lists what changed, what was skipped, available updates, the scan's recommendations, and what the user still has to do. Tell the user to start new Claude Code and Codex sessions so the files load.
 
 ## Personal instructions and project tools
 
-`qp-skills` replaces the retired `alarina` plugin. Its `asami` skill owns personal defaults in one source, `~/.agents/AGENTS.md`; its `asoju` skill owns models and delegation rules. Agent-setup seeds the source from `base/shared/instructions.md` only when missing, including plain-language and Tech Stack defaults, and never overwrites an existing source.
+`qp-skills` replaces the retired `alarina` plugin. Its `asami` skill owns personal defaults in one source, `~/.agents/AGENTS.md`; its `asoju` skill owns models and delegation rules. Agent-setup seeds the source from `base/shared/instructions.md` (two lines on how to talk) only when missing, and never overwrites an existing source.
 
 Codex reads `~/.codex/AGENTS.md` through a symlink to the source; Claude Code reads it through the first line `@~/.agents/AGENTS.md` in `~/.claude/CLAUDE.md`. Claude-only lines may follow the import and are kept. Existing host instruction files that need replacement require `--yes` after approval and are backed up under `~/.agent-setup/backups/`. `mise run plan`, `steps/apply --dry-run`, and `steps/setup --dry-run` show the changes and backups without writing. Doctor checks this layout.
 

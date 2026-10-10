@@ -90,9 +90,7 @@ class SetupTests(unittest.TestCase):
         self.run_step('setup', '--offline', '--no-login', '--yes')
         source, codex, claude = self.instruction_paths()
         text = source.read_text()
-        self.assertIn('# Working with **Test user**', text)
-        self.assertIn('Use plain, clear language.', text)
-        self.assertIn('## Tech Stack', text)
+        self.assertEqual(text, (ROOT / 'base/shared/instructions.md').read_text())
         for retired in ('ASD-STE100', 'Subagents and resources', 'Members and effort', 'Codex workers', 'Opus advisor'):
             self.assertNotIn(retired, text)
         self.assertTrue(codex.is_symlink())
