@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -107,10 +108,24 @@ def plugin_rows(host):
     return [row for row in load_yaml('plugins.yaml')['plugins'] if host in row]
 
 
-def hooks_for(host):
+def hook_rows():
+    rows = load_yaml('hooks.yaml')['hooks']
+    for row in rows:
+        required = row.get('requires', [])
+        if not isinstance(required, list) or any(not isinstance(program, str) or not program for program in required):
+            raise ValueError('Hook requires must be a list of non-empty program names: ' + row['command'])
+    return rows
+
+
+def hook_programs():
+    return list(dict.fromkeys(program for row in hook_rows() for program in row.get('requires', [])))
+
+
+def hooks_for(host, rows=None):
     """Render base/hooks.yaml in the host's native format: event -> [{matcher?, hooks: [..]}]."""
-    events = {}
-    for row in for_host(load_yaml('hooks.yaml')['hooks'], host):
+    # Empty events replace previously installed managed hooks that are now skipped.
+    events = {row['event']: [] for row in for_host(hook_rows(), host)}
+    for row in for_host(hook_rows() if rows is None else rows, host):
         hook = {'type': 'command', 'command': template(row['command'])}
         if 'timeout' in row: hook['timeout'] = row['timeout']
         if 'status' in row: hook['statusMessage'] = row['status']
@@ -119,15 +134,15 @@ def hooks_for(host):
     return events
 
 
-def claude_settings(text):
+def claude_settings(text, rows=None):
     data = json.loads(text)
-    data['hooks'] = hooks_for('claude')
+    data['hooks'] = hooks_for('claude', rows)
     data['enabledPlugins'] = {row['claude']: True for row in plugin_rows('claude')}
     data['extraKnownMarketplaces'] = {m['name']: {'source': {'source': 'github', 'repo': m['source']}} for m in for_host(load_yaml('plugins.yaml')['marketplaces'], 'claude')}
     return serial(data, '.json')
 
 
-def desired():
+def desired(rows=None):
     result = {}
     for client, instruction in [('claude', 'CLAUDE.md'), ('codex', 'AGENTS.md')]:
         directory = ROOT / 'base' / client
@@ -137,16 +152,16 @@ def desired():
             rel = source.relative_to(directory)
             rel = Path(str(rel).removesuffix('.tmpl'))
             text = template(source.read_text())
-            if client == 'claude' and rel == Path('settings.json'): text = claude_settings(text)
+            if client == 'claude' and rel == Path('settings.json'): text = claude_settings(text, rows)
             target = HOME / ('.' + client) / rel
             result[target] = text
-    result[HOME / '.codex/hooks.json'] = serial({'hooks': hooks_for('codex')}, '.json')
+    result[HOME / '.codex/hooks.json'] = serial({'hooks': hooks_for('codex', rows)}, '.json')
     return result
 
 
-def plan():
+def plan(rows=None):
     result = {}
-    for path, data in desired().items():
+    for path, data in desired(rows).items():
         safe(path)
         old = path.read_text() if path.exists() else ''
         suffix = path.suffix
@@ -187,7 +202,11 @@ def apply(args):
     conflicts = [str(p) for p, (old, new) in items.items() if old and old != new and p.suffix not in ('.json', '.toml')]
     if conflicts and not args.yes:
         raise ValueError('Live-file conflicts require --yes: ' + ', '.join(conflicts))
-    if args.dry_run: emit_diff(items); return
+    if args.dry_run:
+        report_hook_tools()
+        emit_diff(items)
+        return
+    items = plan(prepare_hooks(args))
     for path, (_, data) in items.items(): write(path, data)
     print('Applied managed files with backups for overwritten files.')
 
@@ -208,7 +227,9 @@ def tool_names():
 def check_tools(args):
     missing = [tool for tool in tool_names() if not shutil.which(tool)]
     for tool in tool_names(): print(tool + ': ' + (shutil.which(tool) or 'MISSING'))
-    if missing: raise ValueError('Missing tools: ' + ', '.join(missing))
+    errors = installed_hook_errors()
+    if missing: errors.append('Missing tools: ' + ', '.join(missing))
+    if errors: raise ValueError('\n'.join(errors))
 
 
 def plugins(args):
@@ -247,11 +268,15 @@ def skills(args):
             run(['npx', '--yes', 'skills@latest', 'add', row['source'], '--skill', name, '--global', *agents, '--yes'])
 
 
-def toolkit(args):
+def toolkit(args, exclude=()):
     print('\n'.join('\t'.join([language, row['tool'], row['why']]) for language, rows in load_yaml('toolkit.yaml').items() for row in rows))
     if args.offline or args.dry_run:
         print('Toolkit shown only; install skipped.'); return
-    wanted = mise_tools()
+    install_tools({name: binary for name, binary in mise_tools().items() if binary not in exclude})
+
+
+def install_tools(wanted):
+    """Install missing mise tools and activate their binaries, shared by toolkit and hooks."""
     missing = [name for name, binary in wanted.items() if not shutil.which(binary)]
     for name in wanted:
         if name not in missing: print('Skipped (already installed): ' + name + ' ' + tool_version(wanted[name]))
@@ -266,6 +291,65 @@ BINARIES = {'python': 'python3', 'ripgrep': 'rg', 'npm:vite-plus': 'vp', 'npm:ox
 def mise_tools():
     tools = tomllib.loads((ROOT / 'mise.toml').read_text()).get('tools', {})
     return {name: BINARIES.get(name, name) for name in tools}
+
+
+def hook_installer(program):
+    name = next((name for name, binary in mise_tools().items() if binary == program), None)
+    return name, ['mise', 'install', '--cd', str(ROOT), name] if name else None
+
+
+def hook_tool_fix(program):
+    _, command = hook_installer(program)
+    return shlex.join(command) if command else 'add an installer for ' + program + ' to mise.toml'
+
+
+def report_hook_tools():
+    for program in hook_programs():
+        if not shutil.which(program):
+            print('Missing hook requirement: ' + program + '; would install: ' + hook_tool_fix(program), file=sys.stderr)
+
+
+def prepare_hooks(args):
+    ready, attempted, failures = [], set(), {}
+    for row in hook_rows():
+        for program in row.get('requires', []):
+            if shutil.which(program) or program in attempted or args.offline: continue
+            attempted.add(program)
+            name, command = hook_installer(program)
+            if command is None:
+                failures[program] = 'no installer configured'
+                continue
+            try: install_tools({name: program})
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                failures[program] = str(exc)
+        missing = [program for program in row.get('requires', []) if not shutil.which(program)]
+        if missing:
+            reasons = [program + ' is missing (' + failures.get(program, 'offline; installation skipped' if args.offline else 'not on PATH after installation') + '); install: ' + hook_tool_fix(program) for program in missing]
+            print('Skipped hook ' + row['event'] + ' (' + ', '.join(row.get('hosts', ['claude', 'codex'])) + '): ' + row['command'] + ': ' + '; '.join(reasons))
+        else: ready.append(row)
+    return ready
+
+
+def hook_commands(value):
+    if isinstance(value, dict):
+        if isinstance(value.get('command'), str): yield value['command']
+        for item in value.values(): yield from hook_commands(item)
+    elif isinstance(value, list):
+        for item in value: yield from hook_commands(item)
+
+
+def installed_hook_errors():
+    errors = []
+    for host, filename in [('claude', '.claude/settings.json'), ('codex', '.codex/hooks.json')]:
+        path = HOME / filename
+        if not path.is_file(): continue
+        commands = set(hook_commands(json.loads(path.read_text()).get('hooks', {})))
+        for row in for_host(hook_rows(), host):
+            if template(row['command']) not in commands: continue
+            for program in row.get('requires', []):
+                if not shutil.which(program):
+                    errors.append('Installed hook ' + host + ' ' + row['event'] + ' requires missing program ' + program + '; install: ' + hook_tool_fix(program))
+    return errors
 
 
 def tool_version(binary):
@@ -315,7 +399,8 @@ def hook_paths(value):
 def doctor(args):
     errors = []
     mode = profile()
-    for path, wanted in desired().items():
+    ready = [row for row in hook_rows() if all(shutil.which(program) for program in row.get('requires', []))]
+    for path, wanted in desired(ready).items():
         try:
             safe(path)
             if not path.exists(): errors.append('Missing managed file: ' + str(path)); continue
@@ -328,6 +413,8 @@ def doctor(args):
                     if not hook.is_file() or not os.access(hook, os.X_OK): errors.append('Missing executable hook: ' + str(hook))
             elif actual != wanted: errors.append('Managed content differs: ' + str(path))
         except (ValueError, OSError) as exc: errors.append(str(exc))
+    try: errors.extend(installed_hook_errors())
+    except (ValueError, OSError) as exc: errors.append(str(exc))
     if mode == 'full':
         errors.extend('Missing tool: ' + x for x in tool_names() if not shutil.which(x))
         for _, name in skill_rows():
@@ -350,7 +437,7 @@ def doctor(args):
                     if row.get('login'): print('Pending codex login: ' + plugin)
                     else: errors.append('Missing Codex plugin: ' + plugin)
     if errors: raise ValueError('Doctor failed:\n' + '\n'.join(errors))
-    print('Doctor passed: ' + mode + (' (managed files only; tools, plugins, skills and login were skipped).' if mode == 'offline-structural' else ' (managed files, tools, plugins and skills checked).'))
+    print('Doctor passed: ' + mode + (' (managed files and installed hook requirements checked; toolkit, plugins, skills and login were skipped).' if mode == 'offline-structural' else ' (managed files, tools, plugins and skills checked).'))
     if mode != 'full': return
     lock = {'profile': mode, 'checked_at': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'files': {str(p.relative_to(HOME)): hashlib.sha256(p.read_bytes()).hexdigest() for p in desired()}, 'versions': {}, 'plugins': {'claude': claude_installed, 'codex': codex_installed}, 'skills': {name: {'source': source, 'revision': subprocess.run(['git', '-C', str(HOME / '.agents/skills' / name), 'rev-parse', 'HEAD'], text=True, capture_output=True).stdout.strip()} for source, name in skill_rows()}}
     if mode == 'full':
@@ -361,13 +448,16 @@ def doctor(args):
 
 
 def setup(args):
-    if args.dry_run: emit_diff(plan()); print('Plan only: no writes, installs or authentication.'); return
+    if args.dry_run:
+        report_hook_tools()
+        emit_diff(plan())
+        print('Plan only: no writes, installs or authentication.')
+        return
     if not args.yes:
         raise ValueError('Setup requires diff approval first; use --yes after approval.')
     plan()  # Validate malformed live files before installs.
     if not args.offline:
-        toolkit(args)
-        check_tools(args)
+        toolkit(args, exclude=hook_programs())
     apply(args)
     if not args.offline:
         plugins(args)
@@ -434,6 +524,7 @@ def main():
     args = parser.parse_args()
     if args.name: os.environ['AGENT_SETUP_NAME'] = args.name
     if args.command in ('diff', 'render'):
+        report_hook_tools()
         if args.command == 'render':
             if args.output: raise ValueError('Render writes are disabled; redirect stdout to an explicit destination.')
             for path, (_, value) in plan().items(): print('--- ' + str(path) + '\n' + value)

@@ -55,7 +55,7 @@ class SetupTests(unittest.TestCase):
         backups = list((self.home / '.agent-setup/backups').rglob('settings.json'))
         self.assertEqual(len(backups), 1)
         self.assertEqual(json.loads(backups[0].read_text())['tui'], 'old')
-        self.run_step('apply', '--yes')
+        self.run_step('apply', '--offline', '--yes')
         self.assertEqual(len(list((self.home / '.agent-setup/backups').rglob('settings.json'))), 1)
 
     def test_toolkit_installs_only_missing_tools(self):
