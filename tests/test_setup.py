@@ -7,8 +7,6 @@ import tempfile
 import sys
 import tomllib
 import unittest
-from unittest import mock
-import argparse
 import importlib.util
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,21 +61,21 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(len(list((self.home / '.agent-setup/backups').rglob('settings.json'))), 1)
 
     def test_toolkit_installs_only_missing_tools(self):
-        spec = importlib.util.spec_from_file_location('engine', ROOT / 'steps/engine.py')
-        engine = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(engine)
-        present = {'git', 'rg', 'jq'}
-        env_proc = mock.Mock(stdout='{}')
-        with mock.patch.object(engine.shutil, 'which', lambda x: '/bin/' + x if x in present else None), \
-             mock.patch.object(engine, 'tool_version', lambda x: '1.0'), \
-             mock.patch.object(engine, 'load_yaml', return_value={}), \
-             mock.patch.object(engine, 'run') as run, \
-             mock.patch.object(engine.subprocess, 'run', return_value=env_proc):
-            engine.toolkit(argparse.Namespace(offline=False, dry_run=False))
-        command = run.call_args[0][0]
+        self.fake_clients('git', 'mise', 'rg', 'jq')
+        output = self.run_step('toolkit').stdout
+        commands = [json.loads(line) for line in Path(self.env['TEST_COMMANDS']).read_text().splitlines()]
+        command = next(command for command in commands if command[:2] == ['mise', 'install'])
         self.assertIn('gh', command)
+        self.assertIn('uv', command)
         self.assertNotIn('ripgrep', command)
         self.assertNotIn('jq', command)
+        self.assertIn("uv\truns a repo's Python checks with the dependencies the repo declares", output)
+        config = tomllib.loads((ROOT / 'mise.toml').read_text())
+        self.assertEqual(config['tools']['uv'], 'latest')
+        missing = self.run_step('check-tools', check=False)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn('uv: MISSING', missing.stdout)
+        self.assertIn('uv', missing.stderr.partition('Missing tools: ')[2].strip().split(', '))
 
     def snapshot(self):
         return {str(path.relative_to(self.home)): (os.readlink(path) if path.is_symlink() else path.read_bytes() if path.is_file() else None, path.lstat().st_mtime_ns)
@@ -197,7 +195,9 @@ class SetupTests(unittest.TestCase):
     def fake_clients(self, *programs):
         directory = self.home / 'test-bin'
         directory.mkdir(exist_ok=True)
-        self.env['PATH'] = str(directory) + os.pathsep + self.env['PATH']
+        for program in ('python3', 'yq', 'dirname'):
+            (directory / program).symlink_to(shutil.which(program))
+        self.env['PATH'] = str(directory)
         self.env['TEST_COMMANDS'] = str(self.home / 'commands.jsonl')
         script = '#!' + sys.executable + '\n' + '''import json, os, sys
 from pathlib import Path
@@ -206,6 +206,8 @@ with open(os.environ['TEST_COMMANDS'], 'a') as log:
     log.write(json.dumps([program, *sys.argv[1:]]) + '\\n')
 if program == 'codex' and sys.argv[1:] == ['plugin', 'list', '--json']:
     print(json.dumps({'installed': json.loads(os.environ.get('TEST_CODEX_PLUGINS', '[]'))}))
+elif program == 'mise' and sys.argv[1:3] == ['env', '--json']:
+    print('{}')
 else:
     print('1.0.0')
 '''
@@ -245,7 +247,7 @@ else:
         self.assertEqual(removed.read_text(), 'User-owned existing skill.\n')
         self.assertTrue(json.loads((self.home / '.claude/settings.json').read_text())['enabledPlugins']['alarina@alarina'])
 
-    def test_full_doctor_warns_about_retired_plugins_without_failing(self):
+    def test_full_doctor_checks_tools_and_warns_about_retired_plugins(self):
         self.run_step('setup', '--offline', '--no-login', '--yes')
         config = tomllib.loads((ROOT / 'mise.toml').read_text())
         binaries = {'python': 'python3', 'ripgrep': 'rg', 'npm:vite-plus': 'vp', 'npm:oxfmt': 'oxfmt', 'npm:typescript': 'tsc', 'npm:pyright': 'pyright'}
@@ -272,3 +274,7 @@ else:
         self.assertIn('claude plugin uninstall alarina@alarina --scope user', output)
         self.assertIn('codex plugin remove alarina@alarina', output)
         self.assertIn('Doctor passed: full', output)
+        (self.home / 'test-bin/uv').unlink()
+        missing = self.run_step('doctor', '--dry-run', check=False)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertEqual([line for line in missing.stderr.splitlines() if line.startswith('Missing tool: ')], ['Missing tool: uv'])
