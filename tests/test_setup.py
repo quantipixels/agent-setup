@@ -199,11 +199,32 @@ class SetupTests(unittest.TestCase):
             (directory / program).symlink_to(shutil.which(program))
         self.env['PATH'] = str(directory)
         self.env['TEST_COMMANDS'] = str(self.home / 'commands.jsonl')
+        self.env['TEST_MISE_STATE'] = str(self.home / 'mise-installed.json')
         script = '#!' + sys.executable + '\n' + '''import json, os, sys
 from pathlib import Path
 program = Path(sys.argv[0]).name
+if sys.argv[1:] in (['--version'], ['-version']):
+    print('1.0.0')
+    sys.exit(0)
+state = Path(os.environ['TEST_MISE_STATE'])
+installed = json.loads(state.read_text()) if state.exists() else json.loads(os.environ.get('TEST_MISE_INSTALLED', '[]'))
+if program == 'mise' and sys.argv[1:3] == ['--no-config', 'where']:
+    spec = sys.argv[-1]
+    present = spec in installed or ('@' not in spec and any(value.startswith(spec + '@') for value in installed))
+    if present: print(str(Path(sys.argv[0]).parent))
+    sys.exit(0 if present else 1)
 with open(os.environ['TEST_COMMANDS'], 'a') as log:
     log.write(json.dumps([program, *sys.argv[1:]]) + '\\n')
+if program == 'mise' and sys.argv[1] == 'install' and os.environ.get('TEST_INSTALL_TOOLS'):
+    names = sys.argv[4:]
+    state.write_text(json.dumps(list(dict.fromkeys([*installed, *names]))))
+    aliases = {'maven': 'mvn', 'rust': 'cargo', 'erlang': 'erl', 'python': 'python3', 'ripgrep': 'rg'}
+    for spec in names:
+        binary = aliases.get(spec.split('@')[0], spec.split('@')[0])
+        target = Path(sys.argv[0]).parent / binary
+        if not target.exists():
+            target.write_text(Path(sys.argv[0]).read_text())
+            target.chmod(0o755)
 if program == 'codex' and sys.argv[1:] == ['plugin', 'list', '--json']:
     print(json.dumps({'installed': json.loads(os.environ.get('TEST_CODEX_PLUGINS', '[]'))}))
 elif program == 'mise' and sys.argv[1:3] == ['env', '--json']:

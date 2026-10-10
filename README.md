@@ -36,6 +36,10 @@ Removing a plugin or skill from the base stops installing it; it does not uninst
 
 The `tech-stack` skill owns per-project tool choices. Project-specific decisions belong in the project.
 
+Setup scans `~/Projects` up to two directory levels deep, skipping dependency and build folders, and installs missing toolchains for the build files it finds (JDK/Maven/Gradle, Node/pnpm, uv, Flutter, Rust, or Elixir/Erlang). A Gradle wrapper supplies Gradle. Project `.tool-versions` and `mise.toml` pins take precedence over Java versions declared in Maven or Gradle; differing pins are installed side by side, otherwise missing tools use `latest`. Use `--projects <dir>` (repeatable) on `steps/diff`, `steps/setup`, `steps/apply`, or `steps/doctor` to replace the default root. Plan and `--dry-run` list projects, requirements and install commands without writing or installing; apply/setup require `--yes` after approval, offline mode skips installs, and full-profile doctor checks only the scanned projects.
+
+Read-only steps require `yq` on PATH; if it is missing, install it first with `mise install yq` after approval.
+
 Agents should run a repository's own check command (for example, `npm run check`, `mise run check`, or `uv run ...`) rather than system Python; `uv` is installed to run Python checks with the dependencies the repository declares.
 
 ## Non-goals

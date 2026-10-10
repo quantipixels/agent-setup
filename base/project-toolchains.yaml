@@ -1,0 +1,35 @@
+# Registry names, not a preferred-version table. Project pins win; otherwise latest.
+binaries:
+  java: java
+  maven: mvn
+  gradle: gradle
+  node: node
+  pnpm: pnpm
+  python: python3
+  uv: uv
+  flutter: flutter
+  rust: cargo
+  elixir: elixir
+  erlang: erl
+skip_directories: [node_modules, .git, build, target, dist, out, .gradle, .dart_tool, .venv, venv, .next, _build, deps]
+rules:
+  - files: [pom.xml]
+    tools: [java, maven]
+  - files: [build.gradle, build.gradle.kts, gradlew]
+    tools: [java]
+  - files: [build.gradle, build.gradle.kts]
+    unless: [gradlew]
+    tools: [gradle]
+  - files: [package.json]
+    tools: [node]
+  - files: [package.json]
+    requires: [pnpm-lock.yaml]
+    tools: [pnpm]
+  - files: [pyproject.toml, uv.lock]
+    tools: [uv]
+  - files: [pubspec.yaml]
+    tools: [flutter]
+  - files: [Cargo.toml]
+    tools: [rust]
+  - files: [mix.exs]
+    tools: [elixir, erlang]

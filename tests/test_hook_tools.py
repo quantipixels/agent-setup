@@ -26,7 +26,7 @@ class HookToolsTests(unittest.TestCase):
         self.engine = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.engine)
         # Read the actual YAML through yq before replacing PATH discovery or installers.
-        for filename in ('hooks.yaml', 'plugins.yaml'):
+        for filename in ('hooks.yaml', 'plugins.yaml', 'project-toolchains.yaml'):
             self.engine.load_yaml(filename)
         self.args = argparse.Namespace(offline=False, dry_run=False, yes=True, no_login=True)
 
