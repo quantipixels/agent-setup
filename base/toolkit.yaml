@@ -38,6 +38,8 @@ TS:
   - tool: vite-plus (vp), oxlint, oxfmt
     why: "Vite+ toolchain: vp check, lint (Oxlint), format (Oxfmt)"
 Python:
+  - tool: uv
+    why: runs a repo's Python checks with the dependencies the repo declares
   - tool: pyright
     why: Type check Python; the Codex stand-in for a language server
   - tool: ruff

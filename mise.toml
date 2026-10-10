@@ -6,6 +6,7 @@ run_auto_install = false
 
 [tools]
 python = "latest"
+uv = "latest"
 node = "latest"
 claude = "latest"
 codex = "latest"

@@ -36,6 +36,8 @@ Removing a plugin or skill from the base stops installing it; it does not uninst
 
 The `tech-stack` skill owns per-project tool choices. Project-specific decisions belong in the project.
 
+Agents should run a repository's own check command (for example, `npm run check`, `mise run check`, or `uv run ...`) rather than system Python; `uv` is installed to run Python checks with the dependencies the repository declares.
+
 ## Non-goals
 
 - Agent-setup does not store credentials, history, sessions, plugin caches, or MCP OAuth data in this repository.
