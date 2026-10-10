@@ -1,5 +1,5 @@
 import argparse
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
 import io
 import json
@@ -122,7 +122,8 @@ class HookToolsTests(unittest.TestCase):
                  mock.patch.object(self.engine.shutil, 'which', self.which_without({'shellcheck'})), \
                  mock.patch.object(self.engine, 'run') as run, \
                  mock.patch('sys.argv', ['engine.py', command, '--dry-run']), \
-                 redirect_stdout(io.StringIO()) as output:
+                 redirect_stdout(io.StringIO()), \
+                 redirect_stderr(io.StringIO()) as output:
                 self.engine.main()
             run.assert_not_called()
             self.assertEqual(list(self.home.iterdir()), [])

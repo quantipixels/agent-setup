@@ -306,7 +306,7 @@ def hook_tool_fix(program):
 def report_hook_tools():
     for program in hook_programs():
         if not shutil.which(program):
-            print('Missing hook requirement: ' + program + '; would install: ' + hook_tool_fix(program))
+            print('Missing hook requirement: ' + program + '; would install: ' + hook_tool_fix(program), file=sys.stderr)
 
 
 def prepare_hooks(args):
