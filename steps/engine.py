@@ -583,6 +583,43 @@ def installed_hook_errors():
     return errors
 
 
+HOOK_INTERPRETERS = {'sh', 'bash', 'zsh', 'node', 'python', 'python3', 'bun', 'deno', 'ruby'}
+
+
+def expand_hook_path(word):
+    if word.startswith('~/'): word = '$HOME/' + word[2:]
+    word = word.replace('${HOME}', str(HOME)).replace('$HOME', str(HOME))
+    return Path(word) if word.startswith('/') else None
+
+
+def command_files(command):
+    """Files a hook command runs or tests with [ -f ]: interpreter scripts, direct executables, guards."""
+    for segment in re.split(r'&&|\|\||;|\||\n', command):
+        try: words = shlex.split(segment.replace('[', ' [ ').replace(']', ' ] '))
+        except ValueError: continue
+        candidates = [words[i + 1] for i, word in enumerate(words[:-1]) if word in ('-f', '-x', '-e')]
+        words = [w for w in words if w not in ('[', ']', '!', 'exec', 'env')]
+        if words and Path(words[0]).name in HOOK_INTERPRETERS:
+            candidates += [w for w in words[1:] if not w.startswith('-')][:1]
+        elif words: candidates.append(words[0])
+        for word in candidates:
+            path = expand_hook_path(word)
+            if path: yield path
+
+
+def missing_hook_file_warnings():
+    warnings = []
+    for host, filename in [('claude', '.claude/settings.json'), ('codex', '.codex/hooks.json')]:
+        path = HOME / filename
+        if not path.is_file(): continue
+        for event, groups in json.loads(path.read_text()).get('hooks', {}).items():
+            for command in hook_commands(groups):
+                for file in dict.fromkeys(command_files(command)):
+                    if not file.exists():
+                        warnings.append('Warning: ' + host + ' ' + event + ' hook references missing file ' + str(file) + '; remove the hook or reinstall its tool')
+    return warnings
+
+
 def tool_version(binary):
     try:
         proc = subprocess.run([binary, '--version'], text=True, capture_output=True, timeout=20)
@@ -664,6 +701,9 @@ def doctor(args):
         except (ValueError, OSError) as exc: errors.append(str(exc))
     try: errors.extend(installed_hook_errors())
     except (ValueError, OSError) as exc: errors.append(str(exc))
+    try:
+        for warning in missing_hook_file_warnings(): print(warning)
+    except (ValueError, OSError): pass
     claude_path = HOME / '.claude/plugins/installed_plugins.json'
     claude_installed = json.loads(claude_path.read_text()).get('plugins', {}) if claude_path.is_file() else {}
     retired_plugin_warning('claude', claude_installed)
