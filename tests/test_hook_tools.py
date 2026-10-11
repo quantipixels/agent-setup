@@ -116,6 +116,30 @@ class HookToolsTests(unittest.TestCase):
             self.assertIn('Installed hook codex PreToolUse requires missing program shellcheck', str(error.exception))
             self.assertIn('install: mise install --cd ' + str(ROOT) + ' shellcheck', str(error.exception))
 
+    def test_doctor_warns_about_hooks_pointing_at_missing_files(self):
+        self.install_fixture()
+        (self.home / '.agent-setup').mkdir(exist_ok=True)
+        (self.home / '.agent-setup/profile.json').write_text('{"profile": "offline-structural"}')
+        present = self.home / 'present.mjs'
+        present.write_text('')
+        guard = '[ ! -f "$HOME/.agents/skills/impeccable/scripts/hook.mjs" ] || node "$HOME/.agents/skills/impeccable/scripts/hook.mjs"'
+        path = self.home / '.codex/hooks.json'
+        data = json.loads(path.read_text())
+        data['hooks']['SessionStart'] = [{'hooks': [{'type': 'command', 'command': guard}, {'type': 'command', 'command': 'node ~/present.mjs'}]}]
+        path.write_text(json.dumps(data))
+        claude = self.home / '.claude/settings.json'
+        settings = json.loads(claude.read_text())
+        settings['hooks']['Stop'] = settings['hooks'].get('Stop', []) + [{'hooks': [{'type': 'command', 'command': 'python3 ' + str(self.home) + '/gone.py'}]}]
+        claude.write_text(json.dumps(settings))
+        output = io.StringIO()
+        with mock.patch.object(self.engine.shutil, 'which', self.which_without(set())), redirect_stdout(output):
+            self.engine.doctor(self.args)
+        text = output.getvalue()
+        self.assertIn('Warning: codex SessionStart hook references missing file ' + str(self.home) + '/.agents/skills/impeccable/scripts/hook.mjs; remove the hook or reinstall its tool', text)
+        self.assertIn('Warning: claude Stop hook references missing file ' + str(self.home) + '/gone.py', text)
+        self.assertNotIn('present.mjs', text)
+        self.assertIn('Doctor passed', text)
+
     def test_plan_and_dry_runs_report_requirements_without_writes_or_installs(self):
         for command in ('diff', 'apply', 'setup'):
             with self.subTest(command=command), \

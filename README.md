@@ -24,6 +24,8 @@ Impeccable manages its own design hook per project; turn it on inside a project 
 
 Hook rows in `base/hooks.yaml` can declare `requires: [program, ...]`. Setup and apply install missing hook programs through the same mise path as toolkit tools, then enable only hooks whose requirements are on PATH. An unavailable program skips its hook with a reason and install command; offline mode skips installation. Plan and `--dry-run` show missing requirements without installing or writing. Doctor and check-tools report missing requirements of installed hooks, including in the offline structural profile. Program names map to the tools declared in `mise.toml` (for example, `python3` maps to `python`).
 
+Doctor also warns, without failing, when an installed hook in `~/.claude/settings.json` or `~/.codex/hooks.json` runs a file that does not exist (scripts passed to `sh`, `node`, `python3`, direct executables, and `[ -f … ]` guards, with `$HOME` and `~` expanded). The warning names the host, event and path; remove the hook or reinstall its tool.
+
 Pause for edits to the user's instruction or settings files, removals, logins (`claude auth login`, `codex login`, `gh auth login`), `sudo`, and choices between the user's version and the base. Codex plugins marked `login: true` install only after `codex login`.
 
 Done when doctor passes and the report lists what changed, what was skipped, available updates, the scan's recommendations, and what the user still has to do. Tell the user to start new Claude Code and Codex sessions so the files load.
