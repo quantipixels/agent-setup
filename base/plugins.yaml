@@ -10,9 +10,10 @@ marketplaces:
   - name: ast-grep-marketplace
     source: ast-grep/agent-skill
     hosts: [claude]
-  - name: qp-skills
-    source: quantipixels/skills
+  - name: alarina
+    source: quantipixels/alarina
     hosts: [claude, codex]
+    autoUpdate: true
 
 plugins:
   - job: Build plugins
@@ -37,9 +38,9 @@ plugins:
     claude: playwright@claude-plugins-official
   - job: Structural code search
     claude: ast-grep@ast-grep-marketplace
-  - job: QP skills and personal defaults
-    claude: qp-skills@qp-skills
-    codex: qp-skills@qp-skills
+  - job: Alárinà skills and personal defaults
+    claude: alarina@alarina
+    codex: alarina@alarina
   - job: Modern web guidance
     claude: modern-web-guidance@claude-plugins-official
     codex: modern-web-guidance@openai-curated-remote
