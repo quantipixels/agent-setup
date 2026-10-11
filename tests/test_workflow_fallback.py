@@ -43,6 +43,9 @@ class WorkflowFallbackTests(unittest.TestCase):
         self.assertEqual(next(row for row in self.engine.plugin_rows('codex') if row.get('preferred'))['codex'], 'qp-skills@qp-skills')
         settings = json.loads(self.engine.claude_settings('{}', []))
         self.assertTrue(settings['enabledPlugins']['alarina@alarina'])
+        for pack in self.row['preferred']['packs']:
+            self.assertTrue(any(pack + '@alarina' in command for command in commands))
+            self.assertTrue(settings['enabledPlugins'][pack + '@alarina'])
         self.assertEqual(settings['extraKnownMarketplaces']['alarina']['source']['repo'], 'quantipixels/alarina')
         self.install('codex')
         config = self.engine.desired([])[self.engine.HOME / '.codex/config.toml']
@@ -52,7 +55,7 @@ class WorkflowFallbackTests(unittest.TestCase):
         for host in ('claude', 'codex'):
             commands = self.install(host, access=False)
             self.assertTrue(any('qp-skills@qp-skills' in command for command in commands))
-            self.assertFalse(any('alarina@alarina' in command for command in commands))
+            self.assertFalse(any('@alarina' in ' '.join(command) for command in commands))
             self.assertEqual(self.engine.workflow_selections()[host], 'qp-skills@qp-skills')
 
     def test_preferred_install_failure_replaces_previous_selection_with_fallback(self):

@@ -165,6 +165,10 @@ def plugin_rows(host):
     return rows
 
 
+def pack_selectors(preferred):
+    return [pack + '@' + preferred['marketplace'] for pack in preferred.get('packs', [])]
+
+
 def preferred_market(host):
     for row in plugin_rows(host):
         preferred = row.get('preferred')
@@ -206,6 +210,7 @@ def claude_settings(text, rows=None):
     preferred = preferred_market('claude')
     if preferred:
         data['extraKnownMarketplaces'][preferred['marketplace']] = {'source': {'source': 'github', 'repo': preferred['source']}, 'autoUpdate': True}
+        data['enabledPlugins'].update({selector: True for selector in pack_selectors(preferred)})
     return serial(data, '.json')
 
 
@@ -391,6 +396,8 @@ def install_workflow(host, row):
                 run(['codex', 'plugin', 'marketplace', 'add', preferred['source']])
             run(['codex', 'plugin', 'marketplace', 'upgrade', preferred['marketplace']])
         install_plugin(host, preferred[host])
+        for selector in pack_selectors(preferred):
+            install_plugin(host, selector)
         selected = preferred[host]
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print('Preferred workflow unavailable on ' + host + ': ' + str(exc) + '; using ' + row[host], flush=True)
