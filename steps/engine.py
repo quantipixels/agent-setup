@@ -12,6 +12,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 import xml.etree.ElementTree as ET
 
@@ -486,8 +487,10 @@ def project_tool_present(spec, binary):
             if re.fullmatch(r'\d+(?:\.\d+)*', version) and (installed == version or installed.startswith(version + '.')): return True
     if version == 'system' or not shutil.which('mise'): return False
     command = ['mise', '--no-config', 'where', name if version == 'latest' else spec]
-    proc = subprocess.run(command, env=dict(install_env(), MISE_OFFLINE='true', MISE_AUTO_INSTALL='false'), capture_output=True, text=True)
-    return proc.returncode == 0
+    # Lookup is read-only: mise state and cache go to a scratch dir so HOME is not written; installs are still found in MISE_DATA_DIR.
+    with tempfile.TemporaryDirectory() as scratch:
+        env = dict(install_env(), MISE_OFFLINE='true', MISE_AUTO_INSTALL='false', MISE_STATE_DIR=scratch + '/state', MISE_CACHE_DIR=scratch + '/cache')
+        return subprocess.run(command, env=env, capture_output=True, text=True).returncode == 0
 
 
 def project_requirements(projects):
