@@ -299,3 +299,48 @@ else:
         missing = self.run_step('doctor', '--dry-run', check=False)
         self.assertNotEqual(missing.returncode, 0)
         self.assertEqual([line for line in missing.stderr.splitlines() if line.startswith('Missing tool: ')], ['Missing tool: uv'])
+
+    def seed_protected(self):
+        files = {
+            '.claude/CLAUDE.md': b'my own claude notes\n',
+            '.codex/AGENTS.md': b'my codex rules\n',
+            '.codex/config.toml': b'# keep me\nmodel = "mine"\napproval_policy = "never"\n',
+        }
+        for rel, data in files.items():
+            path = self.home / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        return files
+
+    def test_skip_keeps_excluded_files_identical(self):
+        files = self.seed_protected()
+        skips = ['--skip', 'instructions', '--skip', 'codex-config']
+        plan = self.run_step('diff', *skips).stdout
+        self.assertIn('Skipped (excluded by --skip instructions): ' + str(self.home / '.claude/CLAUDE.md'), plan)
+        self.assertNotIn('--- ' + str(self.home / '.codex/config.toml'), plan)
+        self.run_step('setup', '--yes', '--offline', '--no-login', *skips)
+        for rel, data in files.items():
+            self.assertEqual((self.home / rel).read_bytes(), data, rel)
+        self.assertFalse((self.home / '.codex/AGENTS.md').is_symlink())
+        self.assertFalse((self.home / '.agents/AGENTS.md').exists())
+        self.assertTrue((self.home / '.claude/settings.json').exists())
+        self.assertTrue((self.home / '.codex/hooks.json').exists())
+        doctor = self.run_step('doctor', *skips).stdout
+        self.assertIn('Skipped (excluded', doctor)
+        self.assertIn('Doctor passed', doctor)
+
+    def test_skip_path_and_guard(self):
+        target = self.home / '.claude/settings.json'
+        target.parent.mkdir(parents=True)
+        target.write_text('{"x": 1}\n')
+        self.run_step('apply', '--yes', '--skip', '.claude/settings.json')
+        self.assertEqual(target.read_text(), '{"x": 1}\n')
+        spec = importlib.util.spec_from_file_location('engine2', ROOT / 'steps/engine.py')
+        engine = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(engine)
+        engine.HOME = self.home.absolute()
+        engine.set_skips(['.claude/settings.json'])
+        before = engine.snapshot()
+        target.write_text('changed\n')
+        with self.assertRaisesRegex(ValueError, 'settings.json'):
+            engine.verify_snapshot(before)

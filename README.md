@@ -32,6 +32,8 @@ Done when doctor passes and the report lists what changed, what was skipped, ava
 
 Codex reads `~/.codex/AGENTS.md` through a symlink to the source; Claude Code reads it through the first line `@~/.agents/AGENTS.md` in `~/.claude/CLAUDE.md`. Claude-only lines may follow the import and are kept. Existing host instruction files that need replacement require `--yes` after approval and are backed up under `~/.agent-setup/backups/`. `mise run plan`, `steps/apply --dry-run`, and `steps/setup --dry-run` show the changes and backups without writing. Doctor checks this layout.
 
+Excluding files: add `--skip <target>` (repeatable) to `steps/diff`, `steps/apply`, `steps/setup`, or `steps/doctor`. Targets are `instructions` (`~/.agents/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`), `codex-config` (`~/.codex/config.toml`), or any path inside HOME (absolute, `~/...`, or relative to HOME), for example `--skip .claude/settings.json`. Skipped files are not written, linked, or created; plan and `--dry-run` list them as skipped, and doctor reports them as skipped instead of failing. Apply and setup hash each skipped path before running and stop with an error naming any that changed, including changes made by plugin or tool installs.
+
 Removing a plugin or skill from the base stops installing it; it does not uninstall it. Doctor warns about an installed retired `alarina` plugin and gives its removal command; that warning does not fail the check.
 
 The `tech-stack` skill owns per-project tool choices. Project-specific decisions belong in the project.
