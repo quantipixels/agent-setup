@@ -20,6 +20,8 @@ Goal: this machine runs the base setup for Claude Code and Codex, and the user's
 6. **Personal defaults.** Once the machine is ready and `alarina` is installed, tell the user to ask their agent to **“set me up”**. This is Alárinà’s setup path for defaults and a retrospective.
 7. **Scan.** Read-only. Look in the Claude, Codex, and tool setup for stale or duplicate items, broken paths, leftover temp and cache folders, outdated tools, and secrets in config. Change nothing; end with recommended cleanups, each with its reason and exact command.
 
+Impeccable manages its own design hook per project; turn it on inside a project with `$impeccable hooks on`. The base installs no Impeccable hook.
+
 Hook rows in `base/hooks.yaml` can declare `requires: [program, ...]`. Setup and apply install missing hook programs through the same mise path as toolkit tools, then enable only hooks whose requirements are on PATH. An unavailable program skips its hook with a reason and install command; offline mode skips installation. Plan and `--dry-run` show missing requirements without installing or writing. Doctor and check-tools report missing requirements of installed hooks, including in the offline structural profile. Program names map to the tools declared in `mise.toml` (for example, `python3` maps to `python`).
 
 Pause for edits to the user's instruction or settings files, removals, logins (`claude auth login`, `codex login`, `gh auth login`), `sudo`, and choices between the user's version and the base. Codex plugins marked `login: true` install only after `codex login`.
