@@ -19,11 +19,12 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parent.parent
 HOME = Path(os.environ.get('HOME', str(Path.home()))).absolute()
 STATE = HOME / '.agent-setup'
-CLAUDE_IMPORT = '@~/.agents/AGENTS.md'
+OFIN = '.agents/skills/ofin/SKILL.md'
+CLAUDE_IMPORT = '@~/' + OFIN
 
 
 SKIP_GROUPS = {
-    'instructions': ['.agents/AGENTS.md', '.codex/AGENTS.md', '.claude/CLAUDE.md'],
+    'instructions': [OFIN, '.codex/AGENTS.md', '.claude/CLAUDE.md'],
     'codex-config': ['.codex/config.toml'],
 }
 SKIPS = {}
@@ -181,7 +182,7 @@ def claude_settings(text, rows=None):
     data = json.loads(text)
     data['hooks'] = hooks_for('claude', rows)
     data['enabledPlugins'] = {row['claude']: True for row in plugin_rows('claude')}
-    data['extraKnownMarketplaces'] = {m['name']: {'source': {'source': 'github', 'repo': m['source']}} for m in for_host(load_yaml('plugins.yaml')['marketplaces'], 'claude')}
+    data['extraKnownMarketplaces'] = {m['name']: {'source': {'source': 'github', 'repo': m['source']}, **({'autoUpdate': True} if m.get('autoUpdate') else {})} for m in for_host(load_yaml('plugins.yaml')['marketplaces'], 'claude')}
     return serial(data, '.json')
 
 
@@ -205,7 +206,7 @@ def desired(rows=None):
 
 
 def instruction_paths():
-    source = safe(HOME / '.agents/AGENTS.md')
+    source = safe(HOME / OFIN)
     codex = HOME / '.codex/AGENTS.md'
     safe(codex.parent)
     if codex.is_symlink():
@@ -217,7 +218,7 @@ def instruction_paths():
 
 
 def instruction_plan():
-    source = HOME / '.agents/AGENTS.md'
+    source = HOME / OFIN
     codex = HOME / '.codex/AGENTS.md'
     claude = HOME / '.claude/CLAUDE.md'
     if not skipped(codex) and not skipped(claude) and not skipped(source): instruction_paths()
@@ -626,17 +627,21 @@ def hook_paths(value):
         for item in value: yield from hook_paths(item)
 
 
+RETIRED_PLUGINS = ['qp-skills@qp-skills']
+
+
 def retired_plugin_warning(host, installed):
-    if 'alarina@alarina' in json.dumps(installed):
-        command = 'claude plugin uninstall alarina@alarina --scope user' if host == 'claude' else 'codex plugin remove alarina@alarina'
-        print('Warning: installed retired alarina plugin (' + host + '); remove with: ' + command)
+    for plugin in RETIRED_PLUGINS:
+        if plugin in json.dumps(installed):
+            command = 'claude plugin uninstall ' + plugin + ' --scope user' if host == 'claude' else 'codex plugin remove ' + plugin
+            print('Warning: installed retired ' + plugin.split('@')[0] + ' plugin (' + host + '); remove with: ' + command)
 
 
 def doctor(args):
     errors = []
     report_skips()
     try:
-        source, codex, claude = instruction_paths() if not any(skipped(p) for p in (HOME / '.agents/AGENTS.md', HOME / '.codex/AGENTS.md', HOME / '.claude/CLAUDE.md')) else (HOME / '.agents/AGENTS.md', HOME / '.codex/AGENTS.md', HOME / '.claude/CLAUDE.md')
+        source, codex, claude = instruction_paths() if not any(skipped(p) for p in (HOME / OFIN, HOME / '.codex/AGENTS.md', HOME / '.claude/CLAUDE.md')) else (HOME / OFIN, HOME / '.codex/AGENTS.md', HOME / '.claude/CLAUDE.md')
         if not skipped(source) and not source.is_file(): errors.append('Missing instruction source: ' + str(source))
         if not skipped(codex) and not codex.is_symlink(): errors.append('Codex instructions must link to ' + str(source) + ': ' + str(codex))
         if not skipped(claude) and (not claude.is_file() or claude.read_text().splitlines()[:1] != [CLAUDE_IMPORT]):

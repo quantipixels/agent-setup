@@ -201,7 +201,7 @@ class ProjectToolchainTests(unittest.TestCase):
             path.parent.mkdir(parents=True)
             path.write_text('Fixture installed skill.\n')
         (self.home / '.agent-setup/profile.json').write_text('{"profile":"full"}')
-        self.env['TEST_CODEX_PLUGINS'] = '["qp-skills@qp-skills"]'
+        self.env['TEST_CODEX_PLUGINS'] = '["alarina@alarina"]'
 
     def test_full_doctor_reports_missing_project_pin_with_fix_and_respects_roots(self):
         project = self.project('backend', **{'pom.xml': '<project><properties><maven.compiler.release>21</maven.compiler.release></properties></project>'})

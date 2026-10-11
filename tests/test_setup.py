@@ -43,8 +43,8 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(codex['hooks']['Stop'][0]['hooks'][0]['statusMessage'], 'Design deep pass')
         self.assertNotIn('matcher', codex['hooks']['Stop'][0])
         self.assertIn(str(self.home), codex['hooks']['PreToolUse'][0]['hooks'][0]['command'])
-        self.assertIn('symlink -> ' + str(self.home / '.agents/AGENTS.md'), out)
-        self.assertIn('@~/.agents/AGENTS.md', out)
+        self.assertIn('symlink -> ' + str(self.home / '.agents/skills/ofin/SKILL.md'), out)
+        self.assertIn('@~/.agents/skills/ofin/SKILL.md', out)
 
     def test_merge_backup_and_idempotency(self):
         target = self.home / '.claude/settings.json'
@@ -82,7 +82,7 @@ class SetupTests(unittest.TestCase):
                 for path in self.home.rglob('*')}
 
     def instruction_paths(self):
-        return self.home / '.agents/AGENTS.md', self.home / '.codex/AGENTS.md', self.home / '.claude/CLAUDE.md'
+        return self.home / '.agents/skills/ofin/SKILL.md', self.home / '.codex/AGENTS.md', self.home / '.claude/CLAUDE.md'
 
     def test_fresh_machine_seeds_one_source_and_links_hosts(self):
         self.run_step('setup', '--offline', '--no-login', '--yes')
@@ -93,7 +93,7 @@ class SetupTests(unittest.TestCase):
             self.assertNotIn(retired, text)
         self.assertTrue(codex.is_symlink())
         self.assertEqual(codex.resolve(), source.resolve())
-        self.assertEqual(claude.read_text(), '@~/.agents/AGENTS.md\n')
+        self.assertEqual(claude.read_text(), '@~/.agents/skills/ofin/SKILL.md\n')
         config = tomllib.loads((self.home / '.codex/config.toml').read_text())
         self.assertEqual(config['model'], 'gpt-6-sol')
         self.assertEqual(config['agents']['default_subagent_model'], 'gpt-6-luna')
@@ -104,7 +104,7 @@ class SetupTests(unittest.TestCase):
         for path in (source, codex, claude): path.parent.mkdir(parents=True, exist_ok=True)
         source.write_text('My own defaults, maintained by asami.\n')
         codex.symlink_to(source)
-        claude.write_text('@~/.agents/AGENTS.md\n\nClaude-only rule.\n')
+        claude.write_text('@~/.agents/skills/ofin/SKILL.md\n\nClaude-only rule.\n')
         before = {path: path.lstat().st_mtime_ns for path in (source, codex, claude)}
         self.run_step('setup', '--offline', '--no-login', '--yes')
         source.write_text('Changed by the user after setup.\n')
@@ -116,7 +116,7 @@ class SetupTests(unittest.TestCase):
         self.assertIn('Doctor passed', self.run_step('doctor').stdout)
         self.assertEqual(before, {path: path.lstat().st_mtime_ns for path in (source, codex, claude)})
         self.assertEqual(source.read_text(), 'Changed by the user after setup.\n')
-        self.assertEqual(claude.read_text(), '@~/.agents/AGENTS.md\n\nClaude-only rule.\n')
+        self.assertEqual(claude.read_text(), '@~/.agents/skills/ofin/SKILL.md\n\nClaude-only rule.\n')
         self.assertFalse((self.home / '.agent-setup/backups').exists())
 
     def test_old_instruction_files_require_approval_and_are_backed_up(self):
@@ -132,7 +132,7 @@ class SetupTests(unittest.TestCase):
                 self.assertIn('Would back up: ' + str(path), output)
                 self.assertIn(str(self.home / '.agent-setup/backups/<timestamp>' / path.relative_to(self.home)), output)
             self.assertIn('replace file with symlink: ' + str(codex) + ' -> ' + str(source), output)
-            self.assertIn('+@~/.agents/AGENTS.md', output)
+            self.assertIn('+@~/.agents/skills/ofin/SKILL.md', output)
             self.assertEqual(self.snapshot(), snapshot)
         refused = self.run_step('apply', '--offline', check=False)
         self.assertNotEqual(refused.returncode, 0)
@@ -142,7 +142,7 @@ class SetupTests(unittest.TestCase):
         self.assertTrue(source.is_file())
         self.assertEqual(codex.resolve(), source.resolve())
         self.assertTrue(codex.is_symlink())
-        self.assertEqual(claude.read_text(), '@~/.agents/AGENTS.md\n')
+        self.assertEqual(claude.read_text(), '@~/.agents/skills/ofin/SKILL.md\n')
         for path, text in old.items():
             backups = list((self.home / '.agent-setup/backups').glob('*/' + str(path.relative_to(self.home))))
             self.assertEqual(len(backups), 1)
@@ -187,9 +187,9 @@ class SetupTests(unittest.TestCase):
                     else: path.write_text(original)
             self.assertEqual(external.read_text(), 'Outside HOME.\n')
         codex.unlink()
-        codex.symlink_to('../.agents/AGENTS.md')
+        codex.symlink_to('../.agents/skills/ofin/SKILL.md')
         self.run_step('apply', '--offline')
-        self.assertEqual(os.readlink(codex), '../.agents/AGENTS.md')
+        self.assertEqual(os.readlink(codex), '../.agents/skills/ofin/SKILL.md')
         self.assertIn('Doctor passed', self.run_step('doctor').stdout)
 
     def fake_clients(self, *programs):
@@ -237,21 +237,21 @@ else:
             path.write_text(script)
             path.chmod(0o755)
 
-    def test_plugin_and_skill_lists_install_qp_skills_without_uninstalling(self):
+    def test_plugin_and_skill_lists_install_alarina_without_uninstalling(self):
         self.run_step('setup', '--offline', '--no-login', '--yes')
         settings = json.loads((self.home / '.claude/settings.json').read_text())
         expected = {'plugin-dev', 'typescript-lsp', 'pyright-lsp', 'rust-analyzer-lsp', 'jdtls-lsp', 'kotlin-lsp', 'swift-lsp', 'hookify', 'playwright', 'modern-web-guidance'}
-        expected = {name + '@claude-plugins-official' for name in expected} | {'codex@openai-codex', 'ast-grep@ast-grep-marketplace', 'qp-skills@qp-skills'}
+        expected = {name + '@claude-plugins-official' for name in expected} | {'codex@openai-codex', 'ast-grep@ast-grep-marketplace', 'alarina@alarina'}
         self.assertEqual(set(settings['enabledPlugins']), expected)
-        self.assertEqual(settings['extraKnownMarketplaces']['qp-skills']['source']['repo'], 'quantipixels/skills')
-        self.assertNotIn('alarina', settings['extraKnownMarketplaces'])
+        self.assertEqual(settings['extraKnownMarketplaces']['alarina'], {'source': {'source': 'github', 'repo': 'quantipixels/alarina'}, 'autoUpdate': True})
+        self.assertNotIn('qp-skills', settings['extraKnownMarketplaces'])
         config = tomllib.loads((self.home / '.codex/config.toml').read_text())
-        self.assertEqual(config['marketplaces'], {'qp-skills': {'source_type': 'git', 'source': 'https://github.com/quantipixels/skills.git'}})
+        self.assertEqual(config['marketplaces'], {'alarina': {'source_type': 'git', 'source': 'https://github.com/quantipixels/alarina.git'}})
         # Removed rows are no longer installed, but existing artifacts stay.
         removed = self.home / '.agents/skills/skill-doctor/SKILL.md'
         removed.parent.mkdir(parents=True)
         removed.write_text('User-owned existing skill.\n')
-        settings['enabledPlugins']['alarina@alarina'] = True
+        settings['enabledPlugins']['qp-skills@qp-skills'] = True
         (self.home / '.claude/settings.json').write_text(json.dumps(settings))
         self.run_step('apply', '--offline')
         self.fake_clients()
@@ -260,13 +260,13 @@ else:
         commands = [json.loads(line) for line in Path(self.env['TEST_COMMANDS']).read_text().splitlines()]
         claude_plugins = {command[3] for command in commands if command[:3] == ['claude', 'plugin', 'install']}
         self.assertEqual(claude_plugins, expected)
-        self.assertIn(['claude', 'plugin', 'marketplace', 'add', 'quantipixels/skills'], commands)
-        self.assertIn(['codex', 'plugin', 'add', 'qp-skills@qp-skills'], commands)
+        self.assertIn(['claude', 'plugin', 'marketplace', 'add', 'quantipixels/alarina'], commands)
+        self.assertIn(['codex', 'plugin', 'add', 'alarina@alarina'], commands)
         installed_skills = {command[command.index('--skill') + 1] for command in commands if command[0] == 'npx'}
         self.assertEqual(installed_skills, {'shadcn', 'agent-browser', 'vercel-react-best-practices', 'vercel-composition-patterns', 'frontend-design', 'impeccable', 'better-interface', 'swiftui-pro', 'appllama-app-design-skill', 'appllama-usage', 'animate', 'animation-vocabulary', 'apple-design', 'emil-design-eng', 'improve-animations', 'fframes-video', 'tech-stack'})
         self.assertFalse(any(word in command for command in commands for word in ('uninstall', 'remove')))
         self.assertEqual(removed.read_text(), 'User-owned existing skill.\n')
-        self.assertTrue(json.loads((self.home / '.claude/settings.json').read_text())['enabledPlugins']['alarina@alarina'])
+        self.assertTrue(json.loads((self.home / '.claude/settings.json').read_text())['enabledPlugins']['qp-skills@qp-skills'])
 
     def test_full_doctor_checks_tools_and_warns_about_retired_plugins(self):
         self.run_step('setup', '--offline', '--no-login', '--yes')
@@ -277,7 +277,7 @@ else:
         cache = self.home / 'fixture-plugin-cache'
         cache.mkdir()
         inventory = {plugin: [{'scope': 'user', 'installPath': str(cache)}] for plugin in settings['enabledPlugins']}
-        inventory['alarina@alarina'] = [{'scope': 'user', 'installPath': str(cache)}]
+        inventory['qp-skills@qp-skills'] = [{'scope': 'user', 'installPath': str(cache)}]
         path = self.home / '.claude/plugins/installed_plugins.json'
         path.parent.mkdir(parents=True)
         path.write_text(json.dumps({'plugins': inventory}))
@@ -290,10 +290,10 @@ else:
             path.parent.mkdir(parents=True)
             path.write_text('Fixture installed skill.\n')
         (self.home / '.agent-setup/profile.json').write_text('{"profile": "full"}\n')
-        self.env['TEST_CODEX_PLUGINS'] = json.dumps(['qp-skills@qp-skills', 'alarina@alarina'])
+        self.env['TEST_CODEX_PLUGINS'] = json.dumps(['alarina@alarina', 'qp-skills@qp-skills'])
         output = self.run_step('doctor', '--dry-run').stdout
-        self.assertIn('claude plugin uninstall alarina@alarina --scope user', output)
-        self.assertIn('codex plugin remove alarina@alarina', output)
+        self.assertIn('claude plugin uninstall qp-skills@qp-skills --scope user', output)
+        self.assertIn('codex plugin remove qp-skills@qp-skills', output)
         self.assertIn('Doctor passed: full', output)
         (self.home / 'test-bin/uv').unlink()
         missing = self.run_step('doctor', '--dry-run', check=False)
@@ -322,7 +322,7 @@ else:
         for rel, data in files.items():
             self.assertEqual((self.home / rel).read_bytes(), data, rel)
         self.assertFalse((self.home / '.codex/AGENTS.md').is_symlink())
-        self.assertFalse((self.home / '.agents/AGENTS.md').exists())
+        self.assertFalse((self.home / '.agents/skills/ofin/SKILL.md').exists())
         self.assertTrue((self.home / '.claude/settings.json').exists())
         self.assertTrue((self.home / '.codex/hooks.json').exists())
         doctor = self.run_step('doctor', *skips).stdout
