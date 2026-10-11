@@ -42,7 +42,7 @@ class SetupTests(unittest.TestCase):
         self.assertNotIn('statusMessage', json.dumps(claude['hooks']))
         self.assertEqual(codex['hooks']['Stop'][0]['hooks'][0]['statusMessage'], 'Design deep pass')
         self.assertNotIn('matcher', codex['hooks']['Stop'][0])
-        self.assertIn(str(self.home), codex['hooks']['PreToolUse'][0]['hooks'][0]['command'])
+        self.assertIn(str(self.home), codex['hooks']['PostToolUse'][0]['hooks'][0]['command'])
         self.assertIn('symlink -> ' + str(self.home / '.agents/skills/ofin/SKILL.md'), out)
         self.assertIn('@~/.agents/skills/ofin/SKILL.md', out)
 

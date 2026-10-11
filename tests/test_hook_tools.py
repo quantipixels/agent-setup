@@ -34,7 +34,7 @@ class HookToolsTests(unittest.TestCase):
         return lambda program: None if program in missing else '/bin/' + program
 
     def installed_hooks(self):
-        return json.loads((self.home / '.codex/hooks.json').read_text())['hooks']
+        return json.loads((self.home / '.claude/settings.json').read_text())['hooks']
 
     def install_fixture(self):
         self.args.offline = True
@@ -43,83 +43,83 @@ class HookToolsTests(unittest.TestCase):
         self.args.offline = False
 
     def test_failed_hook_tool_install_skips_hook_and_reports_fix(self):
-        failure = subprocess.CalledProcessError(1, ['mise', 'install', 'shellcheck'])
+        failure = subprocess.CalledProcessError(1, ['mise', 'install', 'ruff'])
         output = io.StringIO()
-        with mock.patch.object(self.engine.shutil, 'which', self.which_without({'shellcheck'})), \
+        with mock.patch.object(self.engine.shutil, 'which', self.which_without({'ruff'})), \
              mock.patch.object(self.engine, 'run', side_effect=failure) as run, redirect_stdout(output):
             self.engine.apply(self.args)
-        run.assert_called_once_with(['mise', 'install', '--cd', str(ROOT), 'shellcheck'])
-        self.assertEqual(self.installed_hooks()['PreToolUse'], [])
-        self.assertTrue(self.installed_hooks()['Stop'])
-        self.assertIn('Skipped hook PreToolUse (codex)', output.getvalue())
-        self.assertIn('shellcheck is missing', output.getvalue())
-        self.assertIn('install: mise install --cd ' + str(ROOT) + ' shellcheck', output.getvalue())
+        run.assert_called_once_with(['mise', 'install', '--cd', str(ROOT), 'ruff'])
+        self.assertEqual(self.installed_hooks()['PostToolUse'], [])
+        self.assertTrue(self.installed_hooks()['PreToolUse'])
+        self.assertIn('Skipped hook PostToolUse (claude)', output.getvalue())
+        self.assertIn('ruff is missing', output.getvalue())
+        self.assertIn('install: mise install --cd ' + str(ROOT) + ' ruff', output.getvalue())
 
     def test_tool_is_installed_and_activated_before_hook_is_enabled(self):
         present = set()
         def which(program):
-            return None if program == 'shellcheck' and program not in present else '/bin/' + program
+            return None if program == 'ruff' and program not in present else '/bin/' + program
         def activate():
-            present.add('shellcheck')
+            present.add('ruff')
             return mock.Mock(stdout='{}')
         with mock.patch.object(self.engine.shutil, 'which', which), \
              mock.patch.object(self.engine, 'run') as run, \
              mock.patch.object(self.engine.subprocess, 'run', side_effect=lambda *args, **kwargs: activate()) as env, \
              redirect_stdout(io.StringIO()):
             self.engine.apply(self.args)
-        run.assert_called_once_with(['mise', 'install', '--cd', str(ROOT), 'shellcheck'])
+        run.assert_called_once_with(['mise', 'install', '--cd', str(ROOT), 'ruff'])
         self.assertEqual(env.call_args.args[0], ['mise', 'env', '--json', '--cd', str(ROOT)])
-        self.assertTrue(self.installed_hooks()['PreToolUse'])
+        self.assertTrue(self.installed_hooks()['PostToolUse'])
         self.assertNotIn('requires', json.dumps(self.installed_hooks()))
 
     def test_successful_install_without_program_on_path_still_skips_hook(self):
-        with mock.patch.object(self.engine.shutil, 'which', self.which_without({'shellcheck'})), \
+        with mock.patch.object(self.engine.shutil, 'which', self.which_without({'ruff'})), \
              mock.patch.object(self.engine, 'run'), \
              mock.patch.object(self.engine.subprocess, 'run', return_value=mock.Mock(stdout='{}')), \
              redirect_stdout(io.StringIO()) as output:
             self.engine.apply(self.args)
-        self.assertEqual(self.installed_hooks()['PreToolUse'], [])
+        self.assertEqual(self.installed_hooks()['PostToolUse'], [])
         self.assertIn('not on PATH after installation', output.getvalue())
 
     def test_offline_reapply_disables_previously_installed_unusable_hook(self):
         self.install_fixture()
-        self.assertTrue(self.installed_hooks()['PreToolUse'])
+        self.assertTrue(self.installed_hooks()['PostToolUse'])
         self.args.offline = True
-        with mock.patch.object(self.engine.shutil, 'which', self.which_without({'shellcheck'})), \
+        with mock.patch.object(self.engine.shutil, 'which', self.which_without({'ruff'})), \
              mock.patch.object(self.engine, 'run') as run, redirect_stdout(io.StringIO()) as output:
             self.engine.apply(self.args)
             self.engine.doctor(self.args)
         run.assert_not_called()
-        self.assertEqual(self.installed_hooks()['PreToolUse'], [])
+        self.assertEqual(self.installed_hooks()['PostToolUse'], [])
         self.assertIn('offline; installation skipped', output.getvalue())
-        self.assertTrue(list((self.home / '.agent-setup/backups').rglob('hooks.json')))
+        self.assertTrue(list((self.home / '.agent-setup/backups').rglob('settings.json')))
 
     def test_setup_defers_hook_tools_to_the_install_gate(self):
-        with mock.patch.object(self.engine.shutil, 'which', self.which_without({'shellcheck'})), \
+        with mock.patch.object(self.engine.shutil, 'which', self.which_without({'ruff'})), \
              mock.patch.object(self.engine, 'toolkit') as toolkit, \
              mock.patch.object(self.engine, 'run', side_effect=OSError('installer unavailable')), \
              mock.patch.object(self.engine, 'plugins'), mock.patch.object(self.engine, 'skills'), \
              mock.patch.object(self.engine, 'doctor'), mock.patch.object(self.engine, 'updates'), \
              redirect_stdout(io.StringIO()) as output:
             self.engine.setup(self.args)
-        self.assertIn('shellcheck', toolkit.call_args.kwargs['exclude'])
-        self.assertEqual(self.installed_hooks()['PreToolUse'], [])
+        self.assertIn('ruff', toolkit.call_args.kwargs['exclude'])
+        self.assertEqual(self.installed_hooks()['PostToolUse'], [])
         self.assertIn('installer unavailable', output.getvalue())
 
     def test_doctor_and_check_tools_flag_installed_hook_missing_program(self):
         self.install_fixture()
         for action in (self.engine.doctor, self.engine.check_tools):
             with self.subTest(action=action.__name__), \
-                 mock.patch.object(self.engine.shutil, 'which', self.which_without({'shellcheck'})), \
+                 mock.patch.object(self.engine.shutil, 'which', self.which_without({'ruff'})), \
                  redirect_stdout(io.StringIO()), self.assertRaises(ValueError) as error:
                 action(self.args)
-            self.assertIn('Installed hook codex PreToolUse requires missing program shellcheck', str(error.exception))
-            self.assertIn('install: mise install --cd ' + str(ROOT) + ' shellcheck', str(error.exception))
+            self.assertIn('Installed hook claude PostToolUse requires missing program ruff', str(error.exception))
+            self.assertIn('install: mise install --cd ' + str(ROOT) + ' ruff', str(error.exception))
 
     def test_plan_and_dry_runs_report_requirements_without_writes_or_installs(self):
         for command in ('diff', 'apply', 'setup'):
             with self.subTest(command=command), \
-                 mock.patch.object(self.engine.shutil, 'which', self.which_without({'shellcheck'})), \
+                 mock.patch.object(self.engine.shutil, 'which', self.which_without({'ruff'})), \
                  mock.patch.object(self.engine, 'run') as run, \
                  mock.patch('sys.argv', ['engine.py', command, '--dry-run']), \
                  redirect_stdout(io.StringIO()), \
@@ -127,7 +127,7 @@ class HookToolsTests(unittest.TestCase):
                 self.engine.main()
             run.assert_not_called()
             self.assertEqual(list(self.home.iterdir()), [])
-            self.assertIn('Missing hook requirement: shellcheck; would install: mise install', output.getvalue())
+            self.assertIn('Missing hook requirement: ruff; would install: mise install', output.getvalue())
 
     def test_unconfigured_required_program_skips_hook(self):
         self.engine._YAML['hooks.yaml']['hooks'][0]['requires'] = ['unknown-hook-program']
@@ -135,40 +135,32 @@ class HookToolsTests(unittest.TestCase):
              mock.patch.object(self.engine, 'run') as run, redirect_stdout(io.StringIO()) as output:
             self.engine.apply(self.args)
         run.assert_not_called()
-        self.assertEqual(self.installed_hooks()['PreToolUse'], [])
+        self.assertEqual(self.installed_hooks()['PostToolUse'], [])
         self.assertIn('no installer configured', output.getvalue())
         self.assertIn('add an installer for unknown-hook-program to mise.toml', output.getvalue())
 
     def test_requires_must_be_a_list_of_strings(self):
-        for invalid in ('shellcheck', [True], ['']):
+        for invalid in ('ruff', [True], ['']):
             with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, 'list of non-empty program names'):
                 self.engine._YAML['hooks.yaml']['hooks'][0]['requires'] = invalid
                 self.engine.hook_rows()
 
+    def test_doctor_warns_but_passes_for_retired_shellcheck_hook(self):
+        self.install_fixture()
+        path = self.home / '.codex/hooks.json'
+        data = json.loads(path.read_text())
+        data['hooks']['PreToolUse'] = [{'matcher': 'Bash', 'hooks': [{'type': 'command', 'command': 'node "' + str(self.home) + '/.codex/hooks/shellcheck-validate.mjs"'}]}]
+        path.write_text(json.dumps(data))
+        with mock.patch.object(self.engine.shutil, 'which', self.which_without(set())), redirect_stdout(io.StringIO()) as output:
+            self.engine.doctor(self.args)
+        self.assertIn('Warning: installed retired shellcheck-validate hook (codex)', output.getvalue())
+        self.assertIn('remove', output.getvalue())
 
-class ShellcheckHookTests(unittest.TestCase):
-    def run_hook(self, path, command):
-        node = shutil.which('node')
-        self.assertIsNotNone(node, 'node must be installed to run the hook regression')
-        result = subprocess.run([node, str(ROOT / 'base/codex/hooks/shellcheck-validate.mjs')],
-                                env=dict(os.environ, PATH=path), input=json.dumps({'tool_input': {'command': command}}),
-                                text=True, capture_output=True, check=True)
-        return json.loads(result.stdout)
-
-    def test_missing_shellcheck_denies_with_install_message(self):
-        with tempfile.TemporaryDirectory() as empty_path:
-            result = self.run_hook(empty_path, 'echo okay')['hookSpecificOutput']
-        self.assertEqual(result['permissionDecision'], 'deny')
-        self.assertEqual(result['permissionDecisionReason'],
-                         'shellcheck is not installed; run `brew install shellcheck` or `mise run setup`')
-
-    def test_real_shellcheck_warnings_are_still_denied(self):
-        shellcheck = shutil.which('shellcheck')
-        self.assertIsNotNone(shellcheck, 'shellcheck must be installed for the warning regression')
-        with tempfile.TemporaryDirectory() as path:
-            (Path(path) / 'shellcheck').symlink_to(shellcheck)
-            denied = self.run_hook(path, 'echo $missing')['hookSpecificOutput']
-            allowed = self.run_hook(path, 'echo okay')
-        self.assertEqual(denied['permissionDecision'], 'deny')
-        self.assertIn('SC2154', denied['permissionDecisionReason'])
-        self.assertEqual(allowed, {'continue': True})
+    def test_shipped_hooks_use_impeccable_executable_and_drop_shellcheck_gate(self):
+        text = (ROOT / 'base/hooks.yaml').read_text()
+        self.assertNotIn('shellcheck', text)
+        self.assertNotIn('hook.mjs', text)
+        self.assertFalse((ROOT / 'base/codex/hooks').exists())
+        command = '[ ! -f "${HOME}/.agents/skills/impeccable/scripts/impeccable" ] || "${HOME}/.agents/skills/impeccable/scripts/impeccable" hook'
+        commands = [row['command'] for row in self.engine.hook_rows() if 'impeccable' in row['command']]
+        self.assertEqual(commands, [command, command])

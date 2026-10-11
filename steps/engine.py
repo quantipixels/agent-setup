@@ -662,6 +662,9 @@ def doctor(args):
                     if not hook.is_file() or not os.access(hook, os.X_OK): errors.append('Missing executable hook: ' + str(hook))
             elif actual != wanted: errors.append('Managed content differs: ' + str(path))
         except (ValueError, OSError) as exc: errors.append(str(exc))
+    codex_hooks = HOME / '.codex/hooks.json'
+    if codex_hooks.is_file() and 'shellcheck-validate.mjs' in codex_hooks.read_text():
+        print('Warning: installed retired shellcheck-validate hook (codex); remove its PreToolUse Bash entry from ' + str(codex_hooks) + ' or run mise run apply, and delete ' + str(HOME / '.codex/hooks/shellcheck-validate.mjs'))
     try: errors.extend(installed_hook_errors())
     except (ValueError, OSError) as exc: errors.append(str(exc))
     claude_path = HOME / '.claude/plugins/installed_plugins.json'
