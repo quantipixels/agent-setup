@@ -50,7 +50,7 @@ class HookToolsTests(unittest.TestCase):
             self.engine.apply(self.args)
         run.assert_called_once_with(['mise', 'install', '--cd', str(ROOT), 'shellcheck'])
         self.assertEqual(self.installed_hooks()['PreToolUse'], [])
-        self.assertTrue(self.installed_hooks()['Stop'])
+        self.assertNotIn('Stop', self.installed_hooks())
         self.assertIn('Skipped hook PreToolUse (codex)', output.getvalue())
         self.assertIn('shellcheck is missing', output.getvalue())
         self.assertIn('install: mise install --cd ' + str(ROOT) + ' shellcheck', output.getvalue())
