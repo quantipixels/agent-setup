@@ -21,6 +21,56 @@ STATE = HOME / '.agent-setup'
 CLAUDE_IMPORT = '@~/.agents/AGENTS.md'
 
 
+SKIP_GROUPS = {
+    'instructions': ['.agents/AGENTS.md', '.codex/AGENTS.md', '.claude/CLAUDE.md'],
+    'codex-config': ['.codex/config.toml'],
+}
+SKIPS = {}
+
+
+def set_skips(values):
+    """Resolve --skip values (group names or paths) into the paths setup must not touch."""
+    SKIPS.clear()
+    for value in values or []:
+        if value in SKIP_GROUPS:
+            for rel in SKIP_GROUPS[value]: SKIPS[HOME / rel] = value
+            continue
+        path = Path(value).expanduser()
+        if not path.is_absolute(): path = HOME / path
+        path = Path(os.path.normpath(path))
+        if not path.is_relative_to(HOME):
+            raise ValueError('--skip path must be inside HOME: ' + value)
+        SKIPS[path] = value
+
+
+def skipped(path):
+    path = Path(path)
+    return any(path == s or path.is_relative_to(s) for s in SKIPS)
+
+
+def fingerprint(path):
+    """Exact state of a path: absent, symlink target, file bytes, or directory tree."""
+    if path.is_symlink(): return 'link:' + os.readlink(path)
+    if path.is_dir():
+        return 'dir:' + '|'.join(str(c.relative_to(path)) + '=' + fingerprint(c) for c in sorted(path.rglob('*')) if not c.is_dir())
+    if path.exists(): return 'file:' + hashlib.sha256(path.read_bytes()).hexdigest()
+    return 'absent'
+
+
+def snapshot():
+    return {s: fingerprint(s) for s in SKIPS}
+
+
+def verify_snapshot(before):
+    changed = [str(s) for s, state in before.items() if fingerprint(s) != state]
+    if changed:
+        raise ValueError('Skipped files changed during the run (excluded files must stay untouched): ' + ', '.join(changed))
+
+
+def report_skips():
+    for path, name in SKIPS.items(): print('Skipped (excluded by --skip ' + name + '): ' + str(path))
+
+
 def merge(host, base):
     if isinstance(host, dict) and isinstance(base, dict):
         out = dict(host)
@@ -146,8 +196,10 @@ def desired(rows=None):
             text = template(source.read_text())
             if client == 'claude' and rel == Path('settings.json'): text = claude_settings(text, rows)
             target = HOME / ('.' + client) / rel
+            if skipped(target): continue
             result[target] = text
-    result[HOME / '.codex/hooks.json'] = serial({'hooks': hooks_for('codex', rows)}, '.json')
+    if not skipped(HOME / '.codex/hooks.json'):
+        result[HOME / '.codex/hooks.json'] = serial({'hooks': hooks_for('codex', rows)}, '.json')
     return result
 
 
@@ -164,16 +216,29 @@ def instruction_paths():
 
 
 def instruction_plan():
-    source, codex, claude = instruction_paths()
+    source = HOME / '.agents/AGENTS.md'
+    codex = HOME / '.codex/AGENTS.md'
+    claude = HOME / '.claude/CLAUDE.md'
+    if not skipped(codex) and not skipped(claude) and not skipped(source): instruction_paths()
     result = {}
-    if not source.exists():
-        result[source] = ('', template((ROOT / 'base/shared/instructions.md').read_text()))
-    old = source if codex.is_symlink() else codex.read_text() if codex.exists() else ''
-    result[codex] = (old, source)
-    old = claude.read_text() if claude.exists() else ''
-    # A valid import leaves any Claude-only instructions untouched.
-    new = old if old.splitlines()[:1] == [CLAUDE_IMPORT] else CLAUDE_IMPORT + '\n'
-    result[claude] = (old, new)
+    if not skipped(source):
+        safe(source)
+        if not source.exists():
+            result[source] = ('', template((ROOT / 'base/shared/instructions.md').read_text()))
+    if not skipped(codex):
+        safe(codex.parent)
+        if codex.is_symlink():
+            if codex.resolve() != source.resolve():
+                raise ValueError('Refusing unexpected instruction symlink: ' + str(codex))
+        else: safe(codex)
+        old = source if codex.is_symlink() else codex.read_text() if codex.exists() else ''
+        result[codex] = (old, source)
+    if not skipped(claude):
+        safe(claude)
+        old = claude.read_text() if claude.exists() else ''
+        # A valid import leaves any Claude-only instructions untouched.
+        new = old if old.splitlines()[:1] == [CLAUDE_IMPORT] else CLAUDE_IMPORT + '\n'
+        result[claude] = (old, new)
     return result
 
 
@@ -191,6 +256,7 @@ def plan(rows=None):
 
 
 def emit_diff(items):
+    report_skips()
     changed = False
     for path, (old, new) in items.items():
         if old == new: continue
@@ -565,11 +631,12 @@ def retired_plugin_warning(host, installed):
 
 def doctor(args):
     errors = []
+    report_skips()
     try:
-        source, codex, claude = instruction_paths()
-        if not source.is_file(): errors.append('Missing instruction source: ' + str(source))
-        if not codex.is_symlink(): errors.append('Codex instructions must link to ' + str(source) + ': ' + str(codex))
-        if not claude.is_file() or claude.read_text().splitlines()[:1] != [CLAUDE_IMPORT]:
+        source, codex, claude = instruction_paths() if not any(skipped(p) for p in (HOME / '.agents/AGENTS.md', HOME / '.codex/AGENTS.md', HOME / '.claude/CLAUDE.md')) else (HOME / '.agents/AGENTS.md', HOME / '.codex/AGENTS.md', HOME / '.claude/CLAUDE.md')
+        if not skipped(source) and not source.is_file(): errors.append('Missing instruction source: ' + str(source))
+        if not skipped(codex) and not codex.is_symlink(): errors.append('Codex instructions must link to ' + str(source) + ': ' + str(codex))
+        if not skipped(claude) and (not claude.is_file() or claude.read_text().splitlines()[:1] != [CLAUDE_IMPORT]):
             errors.append('Claude instructions must start with ' + CLAUDE_IMPORT + ': ' + str(claude))
     except (ValueError, OSError) as exc: errors.append(str(exc))
     mode = profile()
@@ -703,8 +770,11 @@ def main():
     parser.add_argument('--yes', action='store_true', help='Approve overwrites of conflicting managed text files')
     parser.add_argument('--approve-removals', action='store_true')
     parser.add_argument('--output')
+    parser.add_argument('--skip', action='append', metavar='TARGET', help='Leave files untouched (repeatable): instructions, codex-config, or a path inside HOME')
     parser.add_argument('--projects', action='append', metavar='DIR', help='Project root to scan (repeatable; default: ~/Projects, up to two levels deep)')
     args = parser.parse_args()
+    set_skips(args.skip)
+    before = snapshot()
     if args.command in ('diff', 'render'):
         report_hook_tools()
         report_projects(args, project_toolchains(args))
@@ -716,7 +786,9 @@ def main():
         else: emit_diff(plan())
         return
     actions = {'apply': apply, 'setup': setup, 'check-tools': check_tools, 'plugins': plugins, 'skills': skills, 'toolkit': toolkit, 'doctor': doctor, 'capture': capture, 'cleanup': cleanup}
-    actions[args.command](args)
+    try: actions[args.command](args)
+    finally:
+        if not args.dry_run: verify_snapshot(before)
 
 if __name__ == '__main__':
     try: main()
