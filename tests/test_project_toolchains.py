@@ -191,6 +191,7 @@ class ProjectToolchainTests(unittest.TestCase):
         cache = self.home / 'fixture-plugin-cache'
         cache.mkdir()
         inventory = {plugin: [{'scope': 'user', 'installPath': str(cache)}] for plugin in settings['enabledPlugins']}
+        inventory['qp-skills@qp-skills'] = [{'scope': 'user', 'installPath': str(cache)}]
         path = self.home / '.claude/plugins/installed_plugins.json'
         path.parent.mkdir(parents=True)
         path.write_text(json.dumps({'plugins': inventory}))

@@ -148,8 +148,28 @@ def for_host(rows, host):
     return [row for row in rows if host in row.get('hosts', ['claude', 'codex'])]
 
 
+def workflow_selections():
+    path = STATE / 'workflow.json'
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
 def plugin_rows(host):
-    return [row for row in load_yaml('plugins.yaml')['plugins'] if host in row]
+    selected = workflow_selections().get(host)
+    rows = []
+    for row in load_yaml('plugins.yaml')['plugins']:
+        if host not in row: continue
+        row = dict(row)
+        if row.get('preferred') and selected == row['preferred'][host]:
+            row[host] = selected
+        rows.append(row)
+    return rows
+
+
+def preferred_market(host):
+    for row in plugin_rows(host):
+        preferred = row.get('preferred')
+        if preferred and row[host] == preferred[host]: return preferred
+    return None
 
 
 def hook_rows():
@@ -181,8 +201,11 @@ def hooks_for(host, rows=None):
 def claude_settings(text, rows=None):
     data = json.loads(text)
     data['hooks'] = hooks_for('claude', rows)
-    data['enabledPlugins'] = {row['claude']: True for row in plugin_rows('claude')}
+    data['enabledPlugins'] = {row['claude']: True for row in plugin_rows('claude') if not row.get('preferred') or 'claude' in workflow_selections()}
     data['extraKnownMarketplaces'] = {m['name']: {'source': {'source': 'github', 'repo': m['source']}, **({'autoUpdate': True} if m.get('autoUpdate') else {})} for m in for_host(load_yaml('plugins.yaml')['marketplaces'], 'claude')}
+    preferred = preferred_market('claude')
+    if preferred:
+        data['extraKnownMarketplaces'][preferred['marketplace']] = {'source': {'source': 'github', 'repo': preferred['source']}, 'autoUpdate': True}
     return serial(data, '.json')
 
 
@@ -197,6 +220,12 @@ def desired(rows=None):
             rel = Path(str(rel).removesuffix('.tmpl'))
             text = template(source.read_text())
             if client == 'claude' and rel == Path('settings.json'): text = claude_settings(text, rows)
+            if client == 'codex' and rel == Path('config.toml'):
+                preferred = preferred_market('codex')
+                if preferred:
+                    config = tomllib.loads(text)
+                    config.setdefault('marketplaces', {})[preferred['marketplace']] = {'source_type': 'git', 'source': 'https://github.com/' + preferred['source'] + '.git'}
+                    text = toml_text(config)
             target = HOME / ('.' + client) / rel
             if skipped(target): continue
             result[target] = text
@@ -335,6 +364,45 @@ def check_tools(args):
     if errors: raise ValueError('\n'.join(errors))
 
 
+def install_plugin(host, selector):
+    if host == 'claude':
+        run(['claude', 'plugin', 'install', selector, '--scope', 'user'])
+        run(['claude', 'plugin', 'update', selector, '--scope', 'user'])
+    else:
+        run(['codex', 'plugin', 'add', selector])
+
+
+def install_workflow(host, row):
+    preferred = row['preferred']
+    try:
+        access = subprocess.run(['gh', 'api', 'repos/' + preferred['source'], '--jq', '.permissions.pull'], env=install_env(), capture_output=True, text=True, timeout=30)
+        if access.returncode or access.stdout.strip() != 'true':
+            raise ValueError('repository read access unavailable (gh API status ' + str(access.returncode) + ')')
+        if host == 'claude':
+            path = HOME / '.claude/plugins/known_marketplaces.json'
+            known = json.loads(path.read_text()) if path.is_file() else {}
+            if preferred['marketplace'] not in known:
+                run(['claude', 'plugin', 'marketplace', 'add', preferred['source']])
+            run(['claude', 'plugin', 'marketplace', 'update', preferred['marketplace']])
+        else:
+            config_path = HOME / '.codex/config.toml'
+            config = tomllib.loads(config_path.read_text()) if config_path.is_file() else {}
+            if preferred['marketplace'] not in config.get('marketplaces', {}):
+                run(['codex', 'plugin', 'marketplace', 'add', preferred['source']])
+            run(['codex', 'plugin', 'marketplace', 'upgrade', preferred['marketplace']])
+        install_plugin(host, preferred[host])
+        selected = preferred[host]
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        print('Preferred workflow unavailable on ' + host + ': ' + str(exc) + '; using ' + row[host], flush=True)
+        # Fallback failures propagate; they are not successful setup.
+        install_plugin(host, row[host])
+        selected = row[host]
+    selections = workflow_selections()
+    selections[host] = selected
+    write(STATE / 'workflow.json', json.dumps(selections, indent=2) + '\n')
+    print('Selected engineering workflow on ' + host + ': ' + selected)
+
+
 def plugins(args):
     if args.offline or args.dry_run:
         print('Offline structural profile: skipped plugin installation and authentication.'); return
@@ -344,15 +412,21 @@ def plugins(args):
         if market['name'] not in known:
             run(['claude', 'plugin', 'marketplace', 'add', market['source']])
         run(['claude', 'plugin', 'marketplace', 'update', market['name']])
-    for row in plugin_rows('claude'):
-        run(['claude', 'plugin', 'install', row['claude'], '--scope', 'user'])
-        run(['claude', 'plugin', 'update', row['claude'], '--scope', 'user'])
+    for row in load_yaml('plugins.yaml')['plugins']:
+        if 'claude' not in row: continue
+        if row.get('preferred'): install_workflow('claude', row)
+        else: install_plugin('claude', row['claude'])
     (HOME / '.codex').mkdir(parents=True, exist_ok=True)
-    run(['codex', 'plugin', 'marketplace', 'upgrade'])
-    for row in plugin_rows('codex'):
+    for market in for_host(load_yaml('plugins.yaml')['marketplaces'], 'codex'):
+        run(['codex', 'plugin', 'marketplace', 'upgrade', market['name']])
+    for row in load_yaml('plugins.yaml')['plugins']:
+        if 'codex' not in row: continue
         if row.get('login') and args.no_login:
             print('Needs codex login first: ' + row['codex']); continue
-        run(['codex', 'plugin', 'add', row['codex']])
+        if row.get('preferred'): install_workflow('codex', row)
+        else: install_plugin('codex', row['codex'])
+    # Keep rendering and doctor aligned with the host-specific successful choice.
+    apply(args)
 
 
 def skill_rows(host=None):
@@ -664,16 +738,6 @@ def hook_paths(value):
         for item in value: yield from hook_paths(item)
 
 
-RETIRED_PLUGINS = ['alarina@alarina']
-
-
-def retired_plugin_warning(host, installed):
-    for plugin in RETIRED_PLUGINS:
-        if plugin in json.dumps(installed):
-            command = 'claude plugin uninstall ' + plugin + ' --scope user' if host == 'claude' else 'codex plugin remove ' + plugin
-            print('Warning: installed retired ' + plugin.split('@')[0] + ' plugin (' + host + '); remove with: ' + command)
-
-
 def doctor(args):
     errors = []
     report_skips()
@@ -706,7 +770,6 @@ def doctor(args):
     except (ValueError, OSError): pass
     claude_path = HOME / '.claude/plugins/installed_plugins.json'
     claude_installed = json.loads(claude_path.read_text()).get('plugins', {}) if claude_path.is_file() else {}
-    retired_plugin_warning('claude', claude_installed)
     if mode == 'full':
         errors.extend('Missing tool: ' + x for x in tool_names() if not shutil.which(x))
         projects = project_toolchains(args)
@@ -726,7 +789,6 @@ def doctor(args):
             errors.append('Cannot list Codex plugins: ' + proc.stderr.strip())
         else:
             codex_installed = json.loads(proc.stdout).get('installed', [])
-            retired_plugin_warning('codex', codex_installed)
             for row in plugin_rows('codex'):
                 plugin = row['codex']
                 # Confirm this selector in the CLI's installed inventory, not its cache.

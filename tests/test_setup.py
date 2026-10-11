@@ -242,7 +242,7 @@ else:
         settings = json.loads((self.home / '.claude/settings.json').read_text())
         expected = {'plugin-dev', 'typescript-lsp', 'pyright-lsp', 'rust-analyzer-lsp', 'jdtls-lsp', 'kotlin-lsp', 'swift-lsp', 'hookify', 'playwright', 'modern-web-guidance'}
         expected = {name + '@claude-plugins-official' for name in expected} | {'codex@openai-codex', 'ast-grep@ast-grep-marketplace', 'qp-skills@qp-skills'}
-        self.assertEqual(set(settings['enabledPlugins']), expected)
+        self.assertEqual(set(settings['enabledPlugins']), expected - {'qp-skills@qp-skills'})
         self.assertEqual(settings['extraKnownMarketplaces']['qp-skills'], {'source': {'source': 'github', 'repo': 'quantipixels/skills'}, 'autoUpdate': True})
         self.assertNotIn('alarina', settings['extraKnownMarketplaces'])
         config = tomllib.loads((self.home / '.codex/config.toml').read_text())
@@ -277,6 +277,7 @@ else:
         cache = self.home / 'fixture-plugin-cache'
         cache.mkdir()
         inventory = {plugin: [{'scope': 'user', 'installPath': str(cache)}] for plugin in settings['enabledPlugins']}
+        inventory['qp-skills@qp-skills'] = [{'scope': 'user', 'installPath': str(cache)}]
         inventory['alarina@alarina'] = [{'scope': 'user', 'installPath': str(cache)}]
         path = self.home / '.claude/plugins/installed_plugins.json'
         path.parent.mkdir(parents=True)
@@ -292,8 +293,7 @@ else:
         (self.home / '.agent-setup/profile.json').write_text('{"profile": "full"}\n')
         self.env['TEST_CODEX_PLUGINS'] = json.dumps(['alarina@alarina', 'qp-skills@qp-skills'])
         output = self.run_step('doctor', '--dry-run').stdout
-        self.assertIn('claude plugin uninstall alarina@alarina --scope user', output)
-        self.assertIn('codex plugin remove alarina@alarina', output)
+        self.assertNotIn('installed retired', output)
         self.assertIn('Doctor passed: full', output)
         (self.home / 'test-bin/uv').unlink()
         missing = self.run_step('doctor', '--dry-run', check=False)

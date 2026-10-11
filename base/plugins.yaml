@@ -38,9 +38,14 @@ plugins:
     claude: playwright@claude-plugins-official
   - job: Structural code search
     claude: ast-grep@ast-grep-marketplace
-  - job: QP Skills workflow and personal defaults
+  - job: Engineering workflow and personal defaults
     claude: qp-skills@qp-skills
     codex: qp-skills@qp-skills
+    preferred:
+      source: quantipixels/alarina
+      marketplace: alarina
+      claude: alarina@alarina
+      codex: alarina@alarina
   - job: Modern web guidance
     claude: modern-web-guidance@claude-plugins-official
     codex: modern-web-guidance@openai-curated-remote
