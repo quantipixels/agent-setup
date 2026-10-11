@@ -664,7 +664,7 @@ def hook_paths(value):
         for item in value: yield from hook_paths(item)
 
 
-RETIRED_PLUGINS = ['qp-skills@qp-skills']
+RETIRED_PLUGINS = ['alarina@alarina']
 
 
 def retired_plugin_warning(host, installed):
