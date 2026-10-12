@@ -165,6 +165,10 @@ def plugin_rows(host):
     return rows
 
 
+def pack_selectors(preferred):
+    return [pack + '@' + preferred['marketplace'] for pack in preferred.get('packs', [])]
+
+
 def preferred_market(host):
     for row in plugin_rows(host):
         preferred = row.get('preferred')
@@ -206,6 +210,7 @@ def claude_settings(text, rows=None):
     preferred = preferred_market('claude')
     if preferred:
         data['extraKnownMarketplaces'][preferred['marketplace']] = {'source': {'source': 'github', 'repo': preferred['source']}, 'autoUpdate': True}
+        data['enabledPlugins'].update({selector: True for selector in pack_selectors(preferred)})
     return serial(data, '.json')
 
 
@@ -397,6 +402,13 @@ def install_workflow(host, row):
         # Fallback failures propagate; they are not successful setup.
         install_plugin(host, row[host])
         selected = row[host]
+    else:
+        # The core is installed, so a failed optional pack must not fall back to a second router.
+        for selector in pack_selectors(preferred):
+            try:
+                install_plugin(host, selector)
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                print('Optional pack ' + selector + ' not installed on ' + host + ': ' + str(exc), flush=True)
     selections = workflow_selections()
     selections[host] = selected
     write(STATE / 'workflow.json', json.dumps(selections, indent=2) + '\n')
