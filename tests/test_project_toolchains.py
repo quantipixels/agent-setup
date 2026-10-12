@@ -1,6 +1,8 @@
 import json
+import os
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 import tomllib
 import unittest
@@ -154,6 +156,8 @@ class ProjectToolchainTests(unittest.TestCase):
         binary = self.home / 'test-bin/mise'
         binary.unlink()
         binary.symlink_to(mise)
+        # mise records a one-time migration in its own data directory on first run; warm it so only setup's writes count.
+        subprocess.run([mise, '--no-config', 'where', 'java'], env=self.env, capture_output=True)
         before = self.snapshot()
         result = self.run_step('diff')
         self.assertIn('java@21 maven@latest', result.stdout)
