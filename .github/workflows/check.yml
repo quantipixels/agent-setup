@@ -12,12 +12,11 @@ permissions:
 jobs:
   check:
     runs-on: macos-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      # The tests expect the full toolkit, as the README's `mise install` sets it up.
       - uses: jdx/mise-action@v2
         with:
-          install: false
-      # Only the tools `mise run check` and the tests use, not the whole toolkit.
-      - run: mise install python shellcheck gitleaks yq jq
+          cache: true
       - run: mise run check
