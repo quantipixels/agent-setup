@@ -66,6 +66,14 @@ class WorkflowFallbackTests(unittest.TestCase):
             self.assertEqual(self.engine.workflow_selections()[host], 'qp-skills@qp-skills')
             self.assertEqual(next(row for row in self.engine.plugin_rows(host) if row.get('preferred'))[host], 'qp-skills@qp-skills')
 
+    def test_optional_pack_failure_keeps_preferred_workflow(self):
+        pack = self.row['preferred']['packs'][0] + '@alarina'
+        for host in ('claude', 'codex'):
+            commands = self.install(host, fail=(pack,))
+            self.assertFalse(any('qp-skills@qp-skills' in command for command in commands))
+            self.assertTrue(any(self.row['preferred']['packs'][-1] + '@alarina' in command for command in commands))
+            self.assertEqual(self.engine.workflow_selections()[host], 'alarina@alarina')
+
     def test_preferred_marketplace_refresh_failure_falls_back(self):
         config = self.engine.HOME / '.codex/config.toml'
         config.parent.mkdir()

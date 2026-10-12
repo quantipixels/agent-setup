@@ -396,14 +396,19 @@ def install_workflow(host, row):
                 run(['codex', 'plugin', 'marketplace', 'add', preferred['source']])
             run(['codex', 'plugin', 'marketplace', 'upgrade', preferred['marketplace']])
         install_plugin(host, preferred[host])
-        for selector in pack_selectors(preferred):
-            install_plugin(host, selector)
         selected = preferred[host]
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print('Preferred workflow unavailable on ' + host + ': ' + str(exc) + '; using ' + row[host], flush=True)
         # Fallback failures propagate; they are not successful setup.
         install_plugin(host, row[host])
         selected = row[host]
+    else:
+        # The core is installed, so a failed optional pack must not fall back to a second router.
+        for selector in pack_selectors(preferred):
+            try:
+                install_plugin(host, selector)
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                print('Optional pack ' + selector + ' not installed on ' + host + ': ' + str(exc), flush=True)
     selections = workflow_selections()
     selections[host] = selected
     write(STATE / 'workflow.json', json.dumps(selections, indent=2) + '\n')
