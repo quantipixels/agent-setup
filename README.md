@@ -1,6 +1,6 @@
 # Agent setup
 
-One shared base for Claude Code and Codex on a Mac: settings, hooks, plugins, skills, and the tools the machine needs. It installs the Alárinà plugin (`alarina`) for personal defaults and workflows.
+One shared base for Claude Code and Codex on a Mac: settings, hooks, plugins, skills, and the tools the machine needs. It prefers Alárinà when the user has access and installation succeeds, otherwise it installs QP Skills (`qp-skills`).
 
 **How to use it:** install Claude Code or Codex, open it, and give it this repo link. The agent checks what your machine has, tells you what it would add or change, and asks before it touches your own files. It installs the other CLI if it is missing.
 
@@ -17,7 +17,7 @@ Goal: this machine runs the base setup for Claude Code and Codex, and the user's
 3. **Do.** After the user agrees, install only what is missing, apply the files (back up first), and refresh plugins and skills. Use `steps/` when it fits.
 4. **SIGIDI.** If no `SIGIDI*.app` is in `/Applications` (and the Mac is arm64), install the latest arm64 DMG from the pre-release builds of `quantipixels/sigidi-release`.
 5. **Verify.** Run `mise run doctor`. Fix what fails, or report the exact error.
-6. **Personal defaults.** Once the machine is ready and `alarina` is installed, tell the user to ask their agent to **“set me up”**. This is Alárinà’s setup path for defaults and a retrospective.
+6. **Engineering workflow.** Setup checks GitHub read access to `quantipixels/alarina` and tries its plugin separately on each host. If access or installation fails, it installs the public `qp-skills` plugin from `quantipixels/skills`. Restart each host and confirm the selected plugin's `alarina` router loads. If Alárinà was selected, run `alarina setup`; qp-skills has no `idasile` setup skill, so report requested migration, linking or configuration work as pending. Keep tech-stack as the standards source.
 7. **Scan.** Read-only. Look in the Claude, Codex, and tool setup for stale or duplicate items, broken paths, leftover temp and cache folders, outdated tools, and secrets in config. Change nothing; end with recommended cleanups, each with its reason and exact command.
 
 Impeccable manages its own design hook per project; turn it on inside a project with `$impeccable hooks on`. The base installs no Impeccable hook.
@@ -32,13 +32,13 @@ Done when doctor passes and the report lists what changed, what was skipped, ava
 
 ## Personal instructions and project tools
 
-Alárinà replaces the retired `qp-skills` plugin. Its `asami` skill owns personal defaults in one user-owned skill, `ofin`, at `~/.agents/skills/ofin/SKILL.md`; its `asoju` skill owns models and delegation rules. Agent-setup seeds `ofin` from `base/shared/instructions.md` (two lines on how to talk) only when missing, and never overwrites an existing one. It is never installed through a skill manager.
+Alárinà is preferred; QP Skills is the public fallback/default. Both provide the workflow router. The selected plugin’s `asami` skill owns personal defaults in one user-owned skill, `ofin`, at `~/.agents/skills/ofin/SKILL.md`; its `asoju` skill owns models and delegation rules. Agent-setup seeds `ofin` from `base/shared/instructions.md` (two lines on how to talk) only when missing, and never overwrites an existing one. It is never installed through a skill manager.
 
 Claude Code reads it through `~/.claude/CLAUDE.md`, whose first line is `@~/.agents/skills/ofin/SKILL.md` (the file, not the folder); Claude-only lines may follow the import and are kept. Codex ignores `@path` imports, so `~/.codex/AGENTS.md` is a symlink to the same file. Existing host instruction files that need replacement require `--yes` after approval and are backed up under `~/.agent-setup/backups/`. `mise run plan`, `steps/apply --dry-run`, and `steps/setup --dry-run` show the changes and backups without writing. Doctor checks this layout.
 
 Excluding files: add `--skip <target>` (repeatable) to `steps/diff`, `steps/apply`, `steps/setup`, or `steps/doctor`. Targets are `instructions` (`~/.agents/skills/ofin/SKILL.md`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`), `codex-config` (`~/.codex/config.toml`), or any path inside HOME (absolute, `~/...`, or relative to HOME), for example `--skip .claude/settings.json`. Skipped files are not written, linked, or created; plan and `--dry-run` list them as skipped, and doctor reports them as skipped instead of failing. Apply and setup hash each skipped path before running and stop with an error naming any that changed, including changes made by plugin or tool installs.
 
-Removing a plugin or skill from the base stops installing it; it does not uninstall it. Doctor warns about an installed retired `qp-skills` plugin and gives its removal commands; that warning does not fail the check.
+Removing a plugin or skill from the base stops installing it; it does not uninstall it. Neither supported workflow is treated as retired.
 
 The `tech-stack` skill owns per-project tool choices. Project-specific decisions belong in the project.
 
@@ -51,9 +51,13 @@ Agents should run a repository's own check command (for example, `npm run check`
 ## Non-goals
 
 - Agent-setup does not store credentials, history, sessions, plugin caches, or MCP OAuth data in this repository.
-- It does not own the user's instruction text or model set; Alárinà owns those defaults. Host settings remain machine configuration.
+- It does not own the user's instruction text or model set; QP Skills owns those defaults. Host settings remain machine configuration.
 - It does not choose project tools; it installs only what the machine needs.
 - Checks run locally; there is no hosted CI.
+
+The successful choice for each host is recorded in `~/.agent-setup/workflow.json`; rendering and doctor use that selection. Plan, dry-run and offline mode do not check network access or install plugins; a fresh machine defaults to the public qp-skills configuration. A later online run retries the preferred plugin. Preserve existing plugins and records; do not uninstall either workflow automatically.
+
+If the preferred install fails, report its command/error and the fallback selection. If fallback installation also fails, setup fails instead of recording success. Failures from unrelated plugins still stop setup. Installation checks do not prove skill loading or completion of `alarina setup`; verify those separately.
 
 ## Contributing
 

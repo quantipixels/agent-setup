@@ -237,21 +237,21 @@ else:
             path.write_text(script)
             path.chmod(0o755)
 
-    def test_plugin_and_skill_lists_install_alarina_without_uninstalling(self):
+    def test_plugin_and_skill_lists_install_qp_skills_without_uninstalling(self):
         self.run_step('setup', '--offline', '--no-login', '--yes')
         settings = json.loads((self.home / '.claude/settings.json').read_text())
         expected = {'plugin-dev', 'typescript-lsp', 'pyright-lsp', 'rust-analyzer-lsp', 'jdtls-lsp', 'kotlin-lsp', 'swift-lsp', 'hookify', 'playwright', 'modern-web-guidance'}
-        expected = {name + '@claude-plugins-official' for name in expected} | {'codex@openai-codex', 'ast-grep@ast-grep-marketplace', 'alarina@alarina'}
-        self.assertEqual(set(settings['enabledPlugins']), expected)
-        self.assertEqual(settings['extraKnownMarketplaces']['alarina'], {'source': {'source': 'github', 'repo': 'quantipixels/alarina'}, 'autoUpdate': True})
-        self.assertNotIn('qp-skills', settings['extraKnownMarketplaces'])
+        expected = {name + '@claude-plugins-official' for name in expected} | {'codex@openai-codex', 'ast-grep@ast-grep-marketplace', 'qp-skills@qp-skills'}
+        self.assertEqual(set(settings['enabledPlugins']), expected - {'qp-skills@qp-skills'})
+        self.assertEqual(settings['extraKnownMarketplaces']['qp-skills'], {'source': {'source': 'github', 'repo': 'quantipixels/skills'}, 'autoUpdate': True})
+        self.assertNotIn('alarina', settings['extraKnownMarketplaces'])
         config = tomllib.loads((self.home / '.codex/config.toml').read_text())
-        self.assertEqual(config['marketplaces'], {'alarina': {'source_type': 'git', 'source': 'https://github.com/quantipixels/alarina.git'}})
+        self.assertEqual(config['marketplaces'], {'qp-skills': {'source_type': 'git', 'source': 'https://github.com/quantipixels/skills.git'}})
         # Removed rows are no longer installed, but existing artifacts stay.
         removed = self.home / '.agents/skills/skill-doctor/SKILL.md'
         removed.parent.mkdir(parents=True)
         removed.write_text('User-owned existing skill.\n')
-        settings['enabledPlugins']['qp-skills@qp-skills'] = True
+        settings['enabledPlugins']['alarina@alarina'] = True
         (self.home / '.claude/settings.json').write_text(json.dumps(settings))
         self.run_step('apply', '--offline')
         self.fake_clients()
@@ -260,13 +260,13 @@ else:
         commands = [json.loads(line) for line in Path(self.env['TEST_COMMANDS']).read_text().splitlines()]
         claude_plugins = {command[3] for command in commands if command[:3] == ['claude', 'plugin', 'install']}
         self.assertEqual(claude_plugins, expected)
-        self.assertIn(['claude', 'plugin', 'marketplace', 'add', 'quantipixels/alarina'], commands)
-        self.assertIn(['codex', 'plugin', 'add', 'alarina@alarina'], commands)
+        self.assertIn(['claude', 'plugin', 'marketplace', 'add', 'quantipixels/skills'], commands)
+        self.assertIn(['codex', 'plugin', 'add', 'qp-skills@qp-skills'], commands)
         installed_skills = {command[command.index('--skill') + 1] for command in commands if command[0] == 'npx'}
         self.assertEqual(installed_skills, {'shadcn', 'agent-browser', 'vercel-react-best-practices', 'vercel-composition-patterns', 'frontend-design', 'impeccable', 'better-interface', 'swiftui-pro', 'appllama-app-design-skill', 'appllama-usage', 'animate', 'animation-vocabulary', 'apple-design', 'emil-design-eng', 'improve-animations', 'fframes-video', 'tech-stack'})
         self.assertFalse(any(word in command for command in commands for word in ('uninstall', 'remove')))
         self.assertEqual(removed.read_text(), 'User-owned existing skill.\n')
-        self.assertTrue(json.loads((self.home / '.claude/settings.json').read_text())['enabledPlugins']['qp-skills@qp-skills'])
+        self.assertTrue(json.loads((self.home / '.claude/settings.json').read_text())['enabledPlugins']['alarina@alarina'])
 
     def test_full_doctor_checks_tools_and_warns_about_retired_plugins(self):
         self.run_step('setup', '--offline', '--no-login', '--yes')
@@ -278,6 +278,7 @@ else:
         cache.mkdir()
         inventory = {plugin: [{'scope': 'user', 'installPath': str(cache)}] for plugin in settings['enabledPlugins']}
         inventory['qp-skills@qp-skills'] = [{'scope': 'user', 'installPath': str(cache)}]
+        inventory['alarina@alarina'] = [{'scope': 'user', 'installPath': str(cache)}]
         path = self.home / '.claude/plugins/installed_plugins.json'
         path.parent.mkdir(parents=True)
         path.write_text(json.dumps({'plugins': inventory}))
@@ -292,8 +293,7 @@ else:
         (self.home / '.agent-setup/profile.json').write_text('{"profile": "full"}\n')
         self.env['TEST_CODEX_PLUGINS'] = json.dumps(['alarina@alarina', 'qp-skills@qp-skills'])
         output = self.run_step('doctor', '--dry-run').stdout
-        self.assertIn('claude plugin uninstall qp-skills@qp-skills --scope user', output)
-        self.assertIn('codex plugin remove qp-skills@qp-skills', output)
+        self.assertNotIn('installed retired', output)
         self.assertIn('Doctor passed: full', output)
         (self.home / 'test-bin/uv').unlink()
         missing = self.run_step('doctor', '--dry-run', check=False)
