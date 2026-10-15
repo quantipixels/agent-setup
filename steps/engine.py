@@ -137,10 +137,19 @@ def load_yaml(name):
     if name not in _YAML:
         if not shutil.which('yq'):
             raise ValueError('yq is required to read setup lists; install it first with mise install yq.')
-        command = ['yq']
-        proc = subprocess.run([*command, '-o=json', '.', str(ROOT / 'base' / name)], text=True, capture_output=True)
-        if proc.returncode: raise ValueError('Cannot read base/' + name + ': ' + proc.stderr.strip())
-        _YAML[name] = json.loads(proc.stdout)
+        def read(path):
+            proc = subprocess.run(['yq', '-o=json', '.', str(path)], text=True, capture_output=True)
+            if proc.returncode: raise ValueError('Cannot read ' + str(path) + ': ' + proc.stderr.strip())
+            return json.loads(proc.stdout)
+        data = read(ROOT / 'base' / name)
+        overlay = STATE / 'overlay.yaml'
+        if name == 'plugins.yaml' and overlay.exists():
+            rows = {row['job']: row for row in data['plugins']}
+            for row in read(overlay)['plugins']:
+                job = row['job']
+                if job not in rows: raise ValueError('Unknown overlay plugin job: ' + job)
+                rows[job].update({key: value for key, value in row.items() if key != 'job'})
+        _YAML[name] = data
     return _YAML[name]
 
 
