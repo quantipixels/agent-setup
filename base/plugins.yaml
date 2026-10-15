@@ -41,13 +41,6 @@ plugins:
   - job: Engineering workflow and personal defaults
     claude: qp-skills@qp-skills
     codex: qp-skills@qp-skills
-    preferred:
-      source: quantipixels/alarina
-      marketplace: alarina
-      claude: alarina@alarina
-      codex: alarina@alarina
-      # Optional Alárinà packs from the same private marketplace, installed with the core.
-      packs: [software-eng, productivity, private-share, host-maintenance, yoruba]
   - job: Modern web guidance
     claude: modern-web-guidance@claude-plugins-official
     codex: modern-web-guidance@openai-curated-remote

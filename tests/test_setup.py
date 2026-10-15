@@ -102,7 +102,7 @@ class SetupTests(unittest.TestCase):
     def test_current_instruction_layout_is_untouched(self):
         source, codex, claude = self.instruction_paths()
         for path in (source, codex, claude): path.parent.mkdir(parents=True, exist_ok=True)
-        source.write_text('My own defaults, maintained by asami.\n')
+        source.write_text('My own defaults, maintained by your workflow plugin.\n')
         codex.symlink_to(source)
         claude.write_text('@~/.agents/skills/ofin/SKILL.md\n\nClaude-only rule.\n')
         before = {path: path.lstat().st_mtime_ns for path in (source, codex, claude)}
@@ -242,16 +242,16 @@ else:
         settings = json.loads((self.home / '.claude/settings.json').read_text())
         expected = {'plugin-dev', 'typescript-lsp', 'pyright-lsp', 'rust-analyzer-lsp', 'jdtls-lsp', 'kotlin-lsp', 'swift-lsp', 'hookify', 'playwright', 'modern-web-guidance'}
         expected = {name + '@claude-plugins-official' for name in expected} | {'codex@openai-codex', 'ast-grep@ast-grep-marketplace', 'qp-skills@qp-skills'}
-        self.assertEqual(set(settings['enabledPlugins']), expected - {'qp-skills@qp-skills'})
+        self.assertEqual(set(settings['enabledPlugins']), expected)
         self.assertEqual(settings['extraKnownMarketplaces']['qp-skills'], {'source': {'source': 'github', 'repo': 'quantipixels/skills'}, 'autoUpdate': True})
-        self.assertNotIn('alarina', settings['extraKnownMarketplaces'])
+        self.assertNotIn('workflow', settings['extraKnownMarketplaces'])
         config = tomllib.loads((self.home / '.codex/config.toml').read_text())
         self.assertEqual(config['marketplaces'], {'qp-skills': {'source_type': 'git', 'source': 'https://github.com/quantipixels/skills.git'}})
         # Removed rows are no longer installed, but existing artifacts stay.
         removed = self.home / '.agents/skills/skill-doctor/SKILL.md'
         removed.parent.mkdir(parents=True)
         removed.write_text('User-owned existing skill.\n')
-        settings['enabledPlugins']['alarina@alarina'] = True
+        settings['enabledPlugins']['workflow@workflow'] = True
         (self.home / '.claude/settings.json').write_text(json.dumps(settings))
         self.run_step('apply', '--offline')
         self.fake_clients()
@@ -266,7 +266,7 @@ else:
         self.assertEqual(installed_skills, {'shadcn', 'agent-browser', 'vercel-react-best-practices', 'vercel-composition-patterns', 'frontend-design', 'impeccable', 'better-interface', 'swiftui-pro', 'appllama-app-design-skill', 'appllama-usage', 'animate', 'animation-vocabulary', 'apple-design', 'emil-design-eng', 'improve-animations', 'fframes-video', 'tech-stack'})
         self.assertFalse(any(word in command for command in commands for word in ('uninstall', 'remove')))
         self.assertEqual(removed.read_text(), 'User-owned existing skill.\n')
-        self.assertTrue(json.loads((self.home / '.claude/settings.json').read_text())['enabledPlugins']['alarina@alarina'])
+        self.assertTrue(json.loads((self.home / '.claude/settings.json').read_text())['enabledPlugins']['workflow@workflow'])
 
     def test_full_doctor_checks_tools_and_warns_about_retired_plugins(self):
         self.run_step('setup', '--offline', '--no-login', '--yes')
@@ -278,7 +278,7 @@ else:
         cache.mkdir()
         inventory = {plugin: [{'scope': 'user', 'installPath': str(cache)}] for plugin in settings['enabledPlugins']}
         inventory['qp-skills@qp-skills'] = [{'scope': 'user', 'installPath': str(cache)}]
-        inventory['alarina@alarina'] = [{'scope': 'user', 'installPath': str(cache)}]
+        inventory['workflow@workflow'] = [{'scope': 'user', 'installPath': str(cache)}]
         path = self.home / '.claude/plugins/installed_plugins.json'
         path.parent.mkdir(parents=True)
         path.write_text(json.dumps({'plugins': inventory}))
@@ -291,7 +291,7 @@ else:
             path.parent.mkdir(parents=True)
             path.write_text('Fixture installed skill.\n')
         (self.home / '.agent-setup/profile.json').write_text('{"profile": "full"}\n')
-        self.env['TEST_CODEX_PLUGINS'] = json.dumps(['alarina@alarina', 'qp-skills@qp-skills'])
+        self.env['TEST_CODEX_PLUGINS'] = json.dumps(['workflow@workflow', 'qp-skills@qp-skills'])
         output = self.run_step('doctor', '--dry-run').stdout
         self.assertNotIn('installed retired', output)
         self.assertIn('Doctor passed: full', output)
