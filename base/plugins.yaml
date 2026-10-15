@@ -47,7 +47,7 @@ plugins:
       claude: alarina@alarina
       codex: alarina@alarina
       # Optional Alárinà packs from the same private marketplace, installed with the core.
-      packs: [alarina-maintainer, alarina-extras, qp-personal, private-share, host-maintenance, yoruba]
+      packs: [software-eng, productivity, private-share, host-maintenance, yoruba]
   - job: Modern web guidance
     claude: modern-web-guidance@claude-plugins-official
     codex: modern-web-guidance@openai-curated-remote
