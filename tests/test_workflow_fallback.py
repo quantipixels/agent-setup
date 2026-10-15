@@ -37,6 +37,8 @@ class WorkflowFallbackTests(unittest.TestCase):
         self.assertNotIn('qp-skills@qp-skills', initial['enabledPlugins'])
         commands = self.install('claude')
         self.assertTrue(any('alarina@alarina' in command for command in commands))
+        self.assertTrue(any('software-eng@alarina' in command for command in commands))
+        self.assertTrue(any('productivity@alarina' in command for command in commands))
         self.assertFalse(any('qp-skills@qp-skills' in command for command in commands))
         self.assertEqual(self.engine.workflow_selections(), {'claude': 'alarina@alarina'})
         self.assertEqual(next(row for row in self.engine.plugin_rows('claude') if row.get('preferred'))['claude'], 'alarina@alarina')
@@ -47,7 +49,9 @@ class WorkflowFallbackTests(unittest.TestCase):
             self.assertTrue(any(pack + '@alarina' in command for command in commands))
             self.assertTrue(settings['enabledPlugins'][pack + '@alarina'])
         self.assertEqual(settings['extraKnownMarketplaces']['alarina']['source']['repo'], 'quantipixels/alarina')
-        self.install('codex')
+        commands = self.install('codex')
+        self.assertIn(['codex', 'plugin', 'add', 'software-eng@alarina'], commands)
+        self.assertIn(['codex', 'plugin', 'add', 'productivity@alarina'], commands)
         config = self.engine.desired([])[self.engine.HOME / '.codex/config.toml']
         self.assertIn('https://github.com/quantipixels/alarina.git', config)
 
